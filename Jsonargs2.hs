@@ -23,7 +23,7 @@ data SchemaB a where
   SString :: Maybe Text -> SchemaB Text
   SNumber :: Maybe Scientific -> SchemaB Scientific
   SOneOf  :: SchemaOneOf a -> SchemaB a
-  SAllOf  :: SchemaAllOf a -> SchemaB a
+  SAllOf  :: AllOf a -> SchemaB a
 
 type Schema = FunctorW SchemaB
 
@@ -41,10 +41,10 @@ data SchemaOneOf a where
   SchemaOneOf :: [(Text, Schema a)] -> SchemaOneOf a
   SchemaOneOfDefault :: (Text, Schema a) -> [(Text, Schema a)] -> SchemaOneOf a
 
-type SchemaAllOf = ApplicativeW SchemaAllOfB
+type AllOf = ApplicativeW AllOfB
 
-data SchemaAllOfB a where
-  AllField :: Text -> Schema a -> SchemaAllOfB a
+data AllOfB a where
+  AllField :: Text -> Schema a -> AllOfB a
 
 onFunctorW :: Functor g => (forall a. f a -> g a) -> (FunctorW f b -> g b)
 onFunctorW f = \case
@@ -70,7 +70,7 @@ merge = flip $ \mv -> onFunctorW $ \case
       Just (A.Number n) -> Just n
       _          -> Nothing
     SOneOf s' -> mergeSchemaOneOf s' mv
-    SAllOf s' -> mergeSchemaAllOf s' mv
+    SAllOf s' -> mergeAllOf s' mv
 
 mergeSchemaOneOf :: SchemaOneOf a -> Maybe A.Value -> Maybe a
 mergeSchemaOneOf = \case
@@ -104,12 +104,12 @@ instance Applicative M where
   pure x = M ((pure . pure) x, mempty)
   M (ff, fts) <*> M (xf, xts) = M (liftA2 (<*>) ff xf, fts `mappend` xts)
 
-mergeSchemaAllOf'' :: SchemaAllOf a -> M a
-mergeSchemaAllOf'' = onApplicativeW $ \case
+mergeAllOf'' :: AllOf a -> M a
+mergeAllOf'' = onApplicativeW $ \case
   AllField t schema -> M (merge schema . HM.lookup t, [t])
 
-mergeSchemaAllOf :: SchemaAllOf a -> Maybe A.Value -> Maybe a
-mergeSchemaAllOf s = \case
+mergeAllOf :: AllOf a -> Maybe A.Value -> Maybe a
+mergeAllOf s = \case
   Nothing -> f HM.empty
   Just (A.Object hm) -> if Data.Set.fromList (HM.keys hm)
                            `Data.Set.isSubsetOf`
@@ -118,7 +118,7 @@ mergeSchemaAllOf s = \case
                         else Nothing
   Just _ -> Nothing
 
-  where M (f, ts) = mergeSchemaAllOf'' s
+  where M (f, ts) = mergeAllOf'' s
 
 
 data ComputeTarget = GPU Scientific Text | CPU Scientific deriving Eq
@@ -126,10 +126,10 @@ data ComputeTarget = GPU Scientific Text | CPU Scientific deriving Eq
 oneOfDefault :: (Text, Schema a) -> [(Text, Schema a)] -> Schema a
 oneOfDefault t ts = FunctorW (SOneOf (SchemaOneOfDefault t ts))
 
-allField :: Text -> Schema a -> SchemaAllOf a
+allField :: Text -> Schema a -> AllOf a
 allField t = ApplicativeW . AllField t
 
-allOf :: SchemaAllOf a -> Schema a
+allOf :: AllOf a -> Schema a
 allOf = FunctorW . SAllOf
 
 number :: Maybe Scientific -> Schema Scientific
