@@ -105,6 +105,10 @@ main = do
   assert $ parse cpu (A.Object (HM.fromList [])) == Nothing
 
   assert $ parse size (A.Object (HM.fromList [("large", A.Number 3)])) == Just 3
+  assert $ parse size (A.Object (HM.fromList [])) == Nothing
+  assert $ parse size (A.Object (HM.fromList [("medium", A.Number 3)])) == Nothing
+  assert $ parse size (A.Object (HM.fromList [("large", A.Number 3)
+                                             ,("small", A.Number 3)])) == Nothing
 
 
   putStrLn ""
