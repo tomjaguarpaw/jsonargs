@@ -139,10 +139,13 @@ string :: Maybe Text -> Schema Text
 string = FunctorW . SString
 
 
+computeTarget :: Schema ComputeTarget
 computeTarget = oneOfDefault ("gpu", gpu) [("cpu", cpu)]
 
+cpu :: Schema ComputeTarget
 cpu = allOf (allField "num_cpus" (fmap CPU num_cpus))
 
+gpu :: Schema ComputeTarget
 gpu = allOf (GPU <$> allField "gpu_id" gpu_id
                  <*> allField "cluster" cluster)
 
