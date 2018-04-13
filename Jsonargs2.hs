@@ -60,10 +60,7 @@ onApplicativeW f = \case
   g `Apply` x -> onApplicativeW f g <*> onApplicativeW f x
 
 merge :: Schema a -> Maybe A.Value -> Maybe a
-merge = flip merge'
-
-merge' :: Maybe A.Value -> Schema a -> Maybe a
-merge' mv = onFunctorW $ \case
+merge = flip $ \mv -> onFunctorW $ \case
     SString mText -> case mv of
       Nothing -> mText
       Just (A.String t) -> Just t
