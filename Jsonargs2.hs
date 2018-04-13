@@ -5,10 +5,13 @@
 
 import qualified Data.Aeson as A
 import           Data.Text (Text)
+import qualified Data.Text
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Set
 import           Data.Scientific (Scientific)
-import           Control.Applicative (liftA2)
+import           Control.Applicative (liftA2, Const(Const), getConst)
+import           Data.Monoid ((<>))
+import           Data.Foldable (traverse_)
 
 data FunctorW f a where
   FunctorW :: f a -> FunctorW f a
@@ -124,6 +127,38 @@ mergeAllOf s = \case
 data ComputeTarget = GPU Scientific Text | CPU Scientific | TPU Text
                    deriving Eq
 
+
+mapConst :: (a -> c) -> Const a b -> Const c b
+mapConst f (Const a) = Const (f a)
+
+help :: Schema a -> [Text]
+help = getConst . help'
+
+help' :: Schema a -> Const [Text] a
+help' = onFunctorW $ \case
+  SString mt -> Const (["<string>" <> maybe "" (\t -> " (default is \"" <> t <> "\")") mt])
+  SNumber mn -> Const (["<number>" <> maybe "" (\t -> " (default is " <> Data.Text.pack (show t) <> ")") mn])
+  SOneOf x   -> Const ["One of"] *> helpOneOf x
+  SAllOf x   -> Const ["All of"] *> helpAllOf x
+
+helpFieldSchema :: Text -> (Text, Schema a) -> Const [Text] a
+helpFieldSchema extra (field, schema) =
+  Const ([ "\"" <> field <> "\":" <> extra])
+  *> mapConst (map ((Data.Text.pack "    ") <>)) (help' schema)
+
+helpAllOf :: AllOf a -> Const [Text] a
+helpAllOf = onApplicativeW $ \case
+  AllField field schema -> helpFieldSchema "" (field, schema)
+
+helpOneOf :: OneOf a -> Const [Text] a
+helpOneOf = \case
+  OneOf fields_schemas -> traverse_ (helpFieldSchema "") fields_schemas
+                          *> pure undefined -- Yeah, that's a bit weird
+  OneOfDefault defaults_ fields_schemas ->
+    helpFieldSchema " (default)" defaults_
+    *> traverse_ (helpFieldSchema "") fields_schemas
+    *> pure undefined -- Yeah, that's a bit weird
+
 oneOfDefault :: (Text, Schema a) -> [(Text, Schema a)] -> Schema a
 oneOfDefault t ts = FunctorW (SOneOf (OneOfDefault t ts))
 
@@ -217,6 +252,8 @@ main = do
 
   flip mapM_ ct_defaults $ \(ct_default, ct_expected) -> assert $ merge computeTarget ct_default == Just ct_expected
   flip mapM_ ct_none $ \ct_default -> assert $ merge computeTarget (Just ct_default) == Nothing
+
+  mapM_ (putStrLn . Data.Text.unpack) (help computeTarget)
 
   putStrLn ""
   putStrLn ""
