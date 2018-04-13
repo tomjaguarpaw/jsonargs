@@ -83,6 +83,7 @@ main = do
   assert $ parse cpu (A.Object (HM.fromList [("num_cpus", A.Number 2)
                                             ,("other", A.Number 0)
                                             ])) == Nothing
+  assert $ parse cpu (A.Object (HM.fromList [])) == Nothing
 
   putStrLn ""
   putStrLn ""
