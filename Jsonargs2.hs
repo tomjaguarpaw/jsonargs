@@ -146,15 +146,21 @@ cpu = allOf (allField "num_cpus" (fmap CPU num_cpus))
 gpu = allOf (GPU <$> allField "gpu_id" gpu_id
                  <*> allField "cluster" cluster)
 
+gpu_id :: Schema Scientific
 gpu_id = number (Just 0)
-cluster = string (Just "local")
-num_cpus = number (Just 1)
 
+cluster :: Schema Text
+cluster = string (Just "local")
+
+num_cpus :: Schema Scientific
+num_cpus = number (Just 1)
 
 data Size = Large | Small deriving Eq
 
+int0 :: Schema Scientific
 int0 = number (Just 0)
 
+size :: Schema Size
 size = oneOfDefault ("large", fmap (const Large) int0)
                     [("small", fmap (const Small) int0)]
 
