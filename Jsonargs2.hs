@@ -8,6 +8,10 @@ import qualified Data.HashMap.Strict as HM
 import qualified Data.Set
 import           Data.Scientific (Scientific)
 
+data FunctorW f a where
+  FunctorW :: f a -> FunctorW f a
+  Fmap :: (a -> b) -> FunctorW f a -> FunctorW f b
+
 data Schema a where
   SMap    :: (a -> b) -> Schema a -> Schema b
   SString :: Maybe Text -> Schema Text
