@@ -31,7 +31,7 @@ instance Functor (FunctorW f) where
   fmap = Fmap
 
 instance Functor (ApplicativeW f) where
-  fmap f x = f <$> x
+  fmap f x = pure f <*> x
 
 instance Applicative (ApplicativeW f) where
   pure = Pure
@@ -143,8 +143,8 @@ computeTarget = oneOfDefault ("gpu", gpu) [("cpu", cpu)]
 
 cpu = allOf (allField "num_cpus" (fmap CPU num_cpus))
 
-gpu = allOf (Pure GPU `Apply` allField "gpu_id" gpu_id
-                       `Apply` allField "cluster" cluster)
+gpu = allOf (GPU <$> allField "gpu_id" gpu_id
+                 <*> allField "cluster" cluster)
 
 gpu_id = number (Just 0)
 cluster = string (Just "local")
