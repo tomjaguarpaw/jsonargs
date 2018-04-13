@@ -123,10 +123,19 @@ mergeSchemaAllOf s = \case
 
 data ComputeTarget = GPU Scientific Text | CPU Scientific deriving Eq
 
+oneOfDefault :: (Text, Schema a) -> [(Text, Schema a)] -> Schema a
 oneOfDefault t ts = FunctorW (SOneOf (SchemaOneOfDefault t ts))
+
+allField :: Text -> Schema a -> SchemaAllOf a
 allField t = ApplicativeW . AllField t
+
+allOf :: SchemaAllOf a -> Schema a
 allOf = FunctorW . SAllOf
+
+number :: Maybe Scientific -> Schema Scientific
 number = FunctorW . SNumber
+
+string :: Maybe Text -> Schema Text
 string = FunctorW . SString
 
 
