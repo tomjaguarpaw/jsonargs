@@ -6,18 +6,32 @@ import           Data.Scientific (Scientific)
 import           Data.Text (Text)
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Set
-import           Control.Applicative (liftA2)
+import           Control.Applicative (liftA2, (<|>), empty)
 
-data OneField a
+data OneField a = OneField (Data.Set.Set Text) (HM.HashMap Text A.Value -> Maybe a)
 data AllField a = AllField (Data.Set.Set Text) (HM.HashMap Text A.Value -> Maybe a)
                                           
 newtype Parser a = Parser { runParser :: A.Value -> Maybe a }
 
-oneField :: String -> Parser a -> OneField a
-oneField = undefined
+oneField :: Text -> Parser a -> OneField a
+oneField s p = OneField (Data.Set.singleton s) $ \hm -> HM.lookup s hm >>= parse p
+
+(<||>) :: OneField a -> OneField a -> OneField a
+OneField s1 f1 <||> OneField s2 f2 = OneField (s1 `mappend` s2) (liftA2 (<|>) f1 f2)
+
+noField :: OneField a
+noField = OneField mempty (const empty)
 
 oneOf :: [OneField a] -> Parser a
-oneOf = undefined
+oneOf oneFields = Parser $ \case
+  A.Object hm -> let keys = HM.keys hm
+                 in case keys of
+                     [key] -> if key `Data.Set.member` s
+                              then p hm
+                              else Nothing
+                     _ -> Nothing
+
+  where OneField s p = foldr (<||>) noField oneFields
 
 allField :: Text -> Parser a -> AllField a
 allField s p = AllField (Data.Set.singleton s) $ \hm -> HM.lookup s hm >>= parse p
@@ -47,6 +61,7 @@ instance Applicative AllField where
   AllField mf f <*> AllField mx x = AllField (mf `mappend` mx) (liftA2 (<*>) f x)
 
 instance Functor OneField where
+  fmap f (OneField s p) = OneField s ((fmap . fmap) f p)
 
 instance Functor Parser where
   fmap f (Parser g) = Parser ((fmap . fmap) f g)
@@ -72,6 +87,10 @@ num_cpus = int
 gpu_id = int
 cluster = string
 
+size = oneOf [ oneField "large" int
+             , oneField "small" int
+             ]
+
 parse :: Parser a -> A.Value -> Maybe a
 parse (Parser f) = f
 
@@ -84,6 +103,9 @@ main = do
                                             ,("other", A.Number 0)
                                             ])) == Nothing
   assert $ parse cpu (A.Object (HM.fromList [])) == Nothing
+
+  assert $ parse size (A.Object (HM.fromList [("large", A.Number 3)])) == Just 3
+
 
   putStrLn ""
   putStrLn ""
