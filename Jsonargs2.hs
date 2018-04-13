@@ -109,29 +109,30 @@ size = SOneOf (SchemaOneOfDefault ("large", SMap (const Large) int0)
 
 main :: IO ()
 main = do
+  let (.=) = (,)
+      d = A.object
+      n = A.Number
+      s = A.String
+
   assert $ merge num_cpus Nothing == Just 1
   assert $ merge cluster Nothing  == Just "local"
   assert $ merge cpu Nothing == Just (CPU 1)
 
-  assert $ merge num_cpus (Just (A.Number 2)) == Just 2
-  assert $ merge cluster (Just (A.String "remote")) == Just "remote"
-  assert $ merge cpu (Just (A.Object (HM.singleton "num_cpus" (A.Number 2)))) == Just (CPU 2)
-  assert $ merge cpu (Just (A.Object (HM.singleton "shouldn't exist" (A.Number 2)))) == Nothing
+  assert $ merge num_cpus (Just (n 2)) == Just 2
+  assert $ merge cluster (Just (s "remote")) == Just "remote"
+  assert $ merge cpu (Just (d ["num_cpus" .= n 2])) == Just (CPU 2)
+  assert $ merge cpu (Just (d ["shouldn't exist" .= n 2])) == Nothing
 
-  assert $ merge cpu (Just (A.Object HM.empty)) == Just (CPU 1)
-  assert $ merge gpu (Just (A.Object (HM.singleton "gpu_id" (A.Number 5)))) == Just (GPU 5 "local")
+  assert $ merge cpu (Just (d [])) == Just (CPU 1)
+  assert $ merge gpu (Just (d ["gpu_id" .= n 5])) == Just (GPU 5 "local")
 
   assert $ merge size Nothing == Just Large
 
-  let (.=) = (,)
-      d = A.Object . HM.fromList
-      n = A.Number
-
   let ct_defaults = [ (Nothing, GPU 0 "local")
-                    , (Just (A.Object (HM.singleton "gpu" (A.Object HM.empty))), GPU 0 "local")
-                    , (Just (d ["gpu" .= d ["gpu_id" .= A.Number 1]]), GPU 1 "local")
+                    , (Just (d ["gpu" .= d []]), GPU 0 "local")
+                    , (Just (d ["gpu" .= d ["gpu_id" .= n 1]]), GPU 1 "local")
                     , (Just (d ["cpu" .= d []]), CPU 1)
-                    , (Just (d ["cpu" .= d ["num_cpus" .= A.Number 5]]), CPU 5)
+                    , (Just (d ["cpu" .= d ["num_cpus" .= n 5]]), CPU 5)
                     ]
 
   flip mapM_ ct_defaults $ \(ct_default, ct_expected) -> assert $ merge computeTarget ct_default == Just ct_expected
