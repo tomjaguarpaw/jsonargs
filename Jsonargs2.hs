@@ -121,7 +121,8 @@ mergeAllOf s = \case
   where M (f, ts) = mergeAllOf'' s
 
 
-data ComputeTarget = GPU Scientific Text | CPU Scientific deriving Eq
+data ComputeTarget = GPU Scientific Text | CPU Scientific | TPU Text
+                   deriving Eq
 
 oneOfDefault :: (Text, Schema a) -> [(Text, Schema a)] -> Schema a
 oneOfDefault t ts = FunctorW (SOneOf (OneOfDefault t ts))
@@ -139,8 +140,23 @@ string :: Maybe Text -> Schema Text
 string = FunctorW . SString
 
 
+required :: Maybe a
+required = Nothing
+
+default_ :: a -> Maybe a
+default_ = Just
+
+computeTarget2 :: Schema ComputeTarget
+computeTarget2 = oneOfDefault ("gpu", allOf (GPU <$> allField "gpu_id" (number (default_ 0))
+                                                 <*> allField "cluster" (string (default_ "local"))))
+                              [("cpu", allOf (allField "num_cpus" (CPU <$> number (default_ 1))))
+                              ]
+
 computeTarget :: Schema ComputeTarget
-computeTarget = oneOfDefault ("gpu", gpu) [("cpu", cpu)]
+computeTarget = oneOfDefault ("gpu", gpu) [("cpu", cpu), ("tpu", tpu)]
+
+tpu :: Schema ComputeTarget
+tpu = allOf (allField "tpu_ops" (TPU <$> string required))
 
 cpu :: Schema ComputeTarget
 cpu = allOf (allField "num_cpus" (fmap CPU num_cpus))
@@ -193,9 +209,14 @@ main = do
                     , (Just (d ["gpu" .= d ["gpu_id" .= n 1]]), GPU 1 "local")
                     , (Just (d ["cpu" .= d []]), CPU 1)
                     , (Just (d ["cpu" .= d ["num_cpus" .= n 5]]), CPU 5)
+                    , (Just (d ["tpu" .= d ["tpu_ops" .= s "Some ops"]]), TPU "Some ops")
                     ]
 
+      ct_none = [ d ["tpu" .= d []]
+                ]
+
   flip mapM_ ct_defaults $ \(ct_default, ct_expected) -> assert $ merge computeTarget ct_default == Just ct_expected
+  flip mapM_ ct_none $ \ct_default -> assert $ merge computeTarget (Just ct_default) == Nothing
 
   putStrLn ""
   putStrLn ""
