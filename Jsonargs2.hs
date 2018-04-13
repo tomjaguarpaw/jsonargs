@@ -22,7 +22,7 @@ data ApplicativeW f a where
 data SchemaB a where
   SString :: Maybe Text -> SchemaB Text
   SNumber :: Maybe Scientific -> SchemaB Scientific
-  SOneOf  :: SchemaOneOf a -> SchemaB a
+  SOneOf  :: OneOf a -> SchemaB a
   SAllOf  :: AllOf a -> SchemaB a
 
 type Schema = FunctorW SchemaB
@@ -37,9 +37,9 @@ instance Applicative (ApplicativeW f) where
   pure = Pure
   (<*>) = Apply
 
-data SchemaOneOf a where
-  SchemaOneOf :: [(Text, Schema a)] -> SchemaOneOf a
-  SchemaOneOfDefault :: (Text, Schema a) -> [(Text, Schema a)] -> SchemaOneOf a
+data OneOf a where
+  OneOf :: [(Text, Schema a)] -> OneOf a
+  OneOfDefault :: (Text, Schema a) -> [(Text, Schema a)] -> OneOf a
 
 type AllOf = ApplicativeW AllOfB
 
@@ -69,12 +69,12 @@ merge = flip $ \mv -> onFunctorW $ \case
       Nothing -> mNumber
       Just (A.Number n) -> Just n
       _          -> Nothing
-    SOneOf s' -> mergeSchemaOneOf s' mv
+    SOneOf s' -> mergeOneOf s' mv
     SAllOf s' -> mergeAllOf s' mv
 
-mergeSchemaOneOf :: SchemaOneOf a -> Maybe A.Value -> Maybe a
-mergeSchemaOneOf = \case
-  SchemaOneOf l -> \case
+mergeOneOf :: OneOf a -> Maybe A.Value -> Maybe a
+mergeOneOf = \case
+  OneOf l -> \case
     Nothing -> Nothing
     Just a  -> case a of
       A.Object hm -> case HM.toList hm of
@@ -84,7 +84,7 @@ mergeSchemaOneOf = \case
           schema <- lookup field l
           merge schema (Just fieldOther)
       _ -> Nothing
-  SchemaOneOfDefault (defField, defSchema) l -> \case
+  OneOfDefault (defField, defSchema) l -> \case
     Nothing -> merge defSchema Nothing
     Just a -> case a of
       A.Object hm -> case HM.toList hm of
@@ -124,7 +124,7 @@ mergeAllOf s = \case
 data ComputeTarget = GPU Scientific Text | CPU Scientific deriving Eq
 
 oneOfDefault :: (Text, Schema a) -> [(Text, Schema a)] -> Schema a
-oneOfDefault t ts = FunctorW (SOneOf (SchemaOneOfDefault t ts))
+oneOfDefault t ts = FunctorW (SOneOf (OneOfDefault t ts))
 
 allField :: Text -> Schema a -> AllOf a
 allField t = ApplicativeW . AllField t
