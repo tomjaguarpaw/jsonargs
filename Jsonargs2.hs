@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE Rank2Types #-}
 
 import qualified Data.Aeson as A
 import           Data.Text (Text)
@@ -12,15 +13,13 @@ data FunctorW f a where
   FunctorW :: f a -> FunctorW f a
   Fmap :: (a -> b) -> FunctorW f a -> FunctorW f b
 
-data Schema a where
-  SMap    :: (a -> b) -> Schema a -> Schema b
-  SString :: Maybe Text -> Schema Text
-  SNumber :: Maybe Scientific -> Schema Scientific
-  SOneOf  :: SchemaOneOf a -> Schema a
-  SAllOf  :: SchemaAllOf a -> Schema a
+data SchemaB a where
+  SString :: Maybe Text -> SchemaB Text
+  SNumber :: Maybe Scientific -> SchemaB Scientific
+  SOneOf  :: SchemaOneOf a -> SchemaB a
+  SAllOf  :: SchemaAllOf a -> SchemaB a
 
-instance Functor Schema where
-  fmap = SMap
+type Schema = FunctorW SchemaB
 
 instance Functor (FunctorW f) where
   fmap = Fmap
@@ -35,20 +34,26 @@ data SchemaAllOf a where
   Pure :: a -> SchemaAllOf a
 
 
+onFunctorW :: Functor g => (forall a. f a -> g a) -> (FunctorW f a -> g a)
+onFunctorW f = \case
+  FunctorW b -> f b
+  Fmap g fw -> fmap g (onFunctorW f fw)
 
 merge :: Schema a -> Maybe A.Value -> Maybe a
-merge = \case
-    SMap f s'     -> fmap f . merge s'
-    SString mText -> \case
+merge = flip merge'
+
+merge' :: Maybe A.Value -> Schema a -> Maybe a
+merge' mv = onFunctorW $ \case
+    SString mText -> case mv of
       Nothing -> mText
       Just (A.String t) -> Just t
       _          -> Nothing
-    SNumber mNumber -> \case
+    SNumber mNumber -> case mv of
       Nothing -> mNumber
       Just (A.Number n) -> Just n
       _          -> Nothing
-    SOneOf s' -> mergeSchemaOneOf s'
-    SAllOf s' -> mergeSchemaAllOf s'
+    SOneOf s' -> mergeSchemaOneOf s' mv
+    SAllOf s' -> mergeSchemaAllOf s' mv
 
 mergeSchemaOneOf :: SchemaOneOf a -> Maybe A.Value -> Maybe a
 mergeSchemaOneOf = \case
@@ -96,11 +101,11 @@ mergeSchemaAllOf s = \case
 
 data ComputeTarget = GPU Scientific Text | CPU Scientific deriving Eq
 
-oneOfDefault t ts = SOneOf (SchemaOneOfDefault t ts)
+oneOfDefault t ts = FunctorW (SOneOf (SchemaOneOfDefault t ts))
 allField = AllField
-allOf = SAllOf
-number = SNumber
-string = SString
+allOf = FunctorW . SAllOf
+number = FunctorW . SNumber
+string = FunctorW . SString
 
 
 computeTarget = oneOfDefault ("gpu", gpu) [("cpu", cpu)]
