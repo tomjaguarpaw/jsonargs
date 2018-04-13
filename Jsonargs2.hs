@@ -22,6 +22,9 @@ data Schema a where
 instance Functor Schema where
   fmap = SMap
 
+instance Functor (FunctorW f) where
+  fmap = Fmap
+
 data SchemaOneOf a where
   SchemaOneOf :: [(Text, Schema a)] -> SchemaOneOf a
   SchemaOneOfDefault :: (Text, Schema a) -> [(Text, Schema a)] -> SchemaOneOf a
