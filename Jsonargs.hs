@@ -9,7 +9,7 @@ import qualified Data.Set
 import           Control.Applicative (liftA2)
 
 data OneField a
-data AllField a = AllField (Data.Set.Set Text) (Parser a)
+data AllField a = AllField (Data.Set.Set Text) (HM.HashMap Text A.Value -> Maybe a)
                                           
 newtype Parser a = Parser { runParser :: A.Value -> Maybe a }
 
@@ -20,12 +20,14 @@ oneOf :: [OneField a] -> Parser a
 oneOf = undefined
 
 allField :: Text -> Parser a -> AllField a
-allField s p = AllField (error "fill this in") $ Parser $ \case
-  A.Object hm -> HM.lookup s hm >>= parse p
-  _ -> Nothing
+allField s p = AllField (Data.Set.singleton s) $ \hm -> HM.lookup s hm >>= parse p
 
 allOf :: AllField a -> Parser a
-allOf (AllField _ p) = p
+allOf (AllField s p) = Parser $ \case
+  A.Object hm -> if s == Data.Set.fromList (HM.keys hm)
+                 then p hm
+                 else Nothing
+  _ -> Nothing
 
 int :: Parser Scientific
 int = Parser $ \case
@@ -38,11 +40,11 @@ string = Parser $ \case
   _ -> Nothing
 
 instance Functor AllField where
-  fmap f (AllField s p) = AllField s (fmap f p)
+  fmap f (AllField s p) = AllField s ((fmap . fmap) f p)
 
 instance Applicative AllField where
-  pure = AllField mempty . pure
-  AllField mf f <*> AllField mx x = AllField (mf `mappend` mx) (f <*> x)
+  pure = AllField mempty . pure . pure
+  AllField mf f <*> AllField mx x = AllField (mf `mappend` mx) (liftA2 (<*>) f x)
 
 instance Functor OneField where
 
@@ -77,7 +79,10 @@ main :: IO ()
 main = do
   assert $ parse int (A.Number 1) == Just 1
 
-  assert $ parse cpu (A.Object (HM.fromList [("num_cpus", (A.Number 2))])) == Just (CPU 2)
+  assert $ parse cpu (A.Object (HM.fromList [("num_cpus", A.Number 2)])) == Just (CPU 2)
+  assert $ parse cpu (A.Object (HM.fromList [("num_cpus", A.Number 2)
+                                            ,("other", A.Number 0)
+                                            ])) == Nothing
 
   putStrLn ""
   putStrLn ""
