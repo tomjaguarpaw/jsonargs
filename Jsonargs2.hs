@@ -8,10 +8,16 @@ import           Data.Text (Text)
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Set
 import           Data.Scientific (Scientific)
+import           Control.Applicative (liftA2)
 
 data FunctorW f a where
   FunctorW :: f a -> FunctorW f a
   Fmap :: (a -> b) -> FunctorW f a -> FunctorW f b
+
+data ApplicativeW f a where
+  ApplicativeW :: f a -> ApplicativeW f a
+  Pure :: a -> ApplicativeW f a
+  Apply :: ApplicativeW f (a -> b) -> ApplicativeW f a -> ApplicativeW f b
 
 data SchemaB a where
   SString :: Maybe Text -> SchemaB Text
@@ -24,20 +30,34 @@ type Schema = FunctorW SchemaB
 instance Functor (FunctorW f) where
   fmap = Fmap
 
+instance Functor (ApplicativeW f) where
+  fmap f x = f <$> x
+
+instance Applicative (ApplicativeW f) where
+  pure = Pure
+  (<*>) = Apply
+
 data SchemaOneOf a where
   SchemaOneOf :: [(Text, Schema a)] -> SchemaOneOf a
   SchemaOneOfDefault :: (Text, Schema a) -> [(Text, Schema a)] -> SchemaOneOf a
 
-data SchemaAllOf a where
-  AllField :: Text -> Schema a -> SchemaAllOf a
-  Apply :: SchemaAllOf (a -> b) -> SchemaAllOf a -> SchemaAllOf b
-  Pure :: a -> SchemaAllOf a
+type SchemaAllOf = ApplicativeW SchemaAllOfB
 
+data SchemaAllOfB a where
+  AllField :: Text -> Schema a -> SchemaAllOfB a
 
-onFunctorW :: Functor g => (forall a. f a -> g a) -> (FunctorW f a -> g a)
+onFunctorW :: Functor g => (forall a. f a -> g a) -> (FunctorW f b -> g b)
 onFunctorW f = \case
   FunctorW b -> f b
   Fmap g fw -> fmap g (onFunctorW f fw)
+
+onApplicativeW :: Applicative g
+               => (forall a. f a -> g a)
+               -> (ApplicativeW f b -> g b)
+onApplicativeW f = \case
+  ApplicativeW b -> f b
+  Pure x -> pure x
+  g `Apply` x -> onApplicativeW f g <*> onApplicativeW f x
 
 merge :: Schema a -> Maybe A.Value -> Maybe a
 merge = flip merge'
@@ -78,13 +98,18 @@ mergeSchemaOneOf = \case
           merge schema (Just fieldOther)
       _ -> Nothing
 
-mergeSchemaAllOf' :: SchemaAllOf a -> (HM.HashMap Text A.Value -> Maybe a, [Text])
-mergeSchemaAllOf' = \case
-  Pure a -> (const (Just a), [])
-  Apply x y -> case mergeSchemaAllOf' x of
-    (gx, lx) -> case mergeSchemaAllOf' y of
-      (gy, ly) -> (\v -> gx v <*> gy v, lx ++ ly)
-  AllField t schema -> (merge schema . HM.lookup t, [t])
+data M a = M (HM.HashMap Text A.Value -> Maybe a, [Text])
+
+instance Functor M where
+  fmap f (M (g, ts)) = M ((fmap . fmap) f g, ts)
+
+instance Applicative M where
+  pure x = M ((pure . pure) x, mempty)
+  M (ff, fts) <*> M (xf, xts) = M (liftA2 (<*>) ff xf, fts `mappend` xts)
+
+mergeSchemaAllOf'' :: SchemaAllOf a -> M a
+mergeSchemaAllOf'' = onApplicativeW $ \case
+  AllField t schema -> M (merge schema . HM.lookup t, [t])
 
 mergeSchemaAllOf :: SchemaAllOf a -> Maybe A.Value -> Maybe a
 mergeSchemaAllOf s = \case
@@ -96,13 +121,13 @@ mergeSchemaAllOf s = \case
                         else Nothing
   Just _ -> Nothing
 
-  where (f, ts) = mergeSchemaAllOf' s
+  where M (f, ts) = mergeSchemaAllOf'' s
 
 
 data ComputeTarget = GPU Scientific Text | CPU Scientific deriving Eq
 
 oneOfDefault t ts = FunctorW (SOneOf (SchemaOneOfDefault t ts))
-allField = AllField
+allField t = ApplicativeW . AllField t
 allOf = FunctorW . SAllOf
 number = FunctorW . SNumber
 string = FunctorW . SString
