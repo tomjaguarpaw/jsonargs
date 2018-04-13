@@ -19,6 +19,8 @@ data Schema a where
   SOneOf  :: SchemaOneOf a -> Schema a
   SAllOf  :: SchemaAllOf a -> Schema a
 
+instance Functor Schema where
+  fmap = SMap
 
 data SchemaOneOf a where
   SchemaOneOf :: [(Text, Schema a)] -> SchemaOneOf a
@@ -91,25 +93,31 @@ mergeSchemaAllOf s = \case
 
 data ComputeTarget = GPU Scientific Text | CPU Scientific deriving Eq
 
-computeTarget = SOneOf (SchemaOneOfDefault ("gpu", gpu)
-                                           [("cpu", cpu)])
+oneOfDefault t ts = SOneOf (SchemaOneOfDefault t ts)
+allField = AllField
+allOf = SAllOf
+number = SNumber
+string = SString
 
-cpu = SAllOf (AllField "num_cpus" (SMap CPU num_cpus))
 
-gpu = SAllOf (Pure GPU `Apply` AllField "gpu_id" gpu_id
-                       `Apply` AllField "cluster" cluster)
+computeTarget = oneOfDefault ("gpu", gpu) [("cpu", cpu)]
 
-gpu_id = SNumber (Just 0)
-cluster = SString (Just "local")
-num_cpus = SNumber (Just 1)
+cpu = allOf (allField "num_cpus" (fmap CPU num_cpus))
+
+gpu = allOf (Pure GPU `Apply` allField "gpu_id" gpu_id
+                       `Apply` allField "cluster" cluster)
+
+gpu_id = number (Just 0)
+cluster = string (Just "local")
+num_cpus = number (Just 1)
 
 
 data Size = Large | Small deriving Eq
 
-int0 = SNumber (Just 0)
+int0 = number (Just 0)
 
-size = SOneOf (SchemaOneOfDefault ("large", SMap (const Large) int0)
-                                  [ ("small", SMap (const Small) int0) ])
+size = oneOfDefault ("large", fmap (const Large) int0)
+                    [("small", fmap (const Small) int0)]
 
 main :: IO ()
 main = do
