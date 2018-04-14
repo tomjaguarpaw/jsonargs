@@ -9,9 +9,9 @@ import qualified Data.Text
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Set
 import           Data.Scientific (Scientific)
-import           Control.Applicative (liftA2, Const(Const), getConst)
+import           Control.Applicative (liftA2, Const(Const), getConst, empty)
 import           Data.Monoid ((<>))
-import           Data.Foldable (traverse_)
+import           Data.Foldable (traverse_, asum)
 
 class Sum f where
   sZero :: f a
@@ -20,6 +20,12 @@ class Sum f where
 instance Monoid m => Sum (Const m) where
   sZero = Const mempty
   sSum = Const . mconcat . map getConst
+
+newtype TSList a = TSList { unTSList :: [(Text, Schema a)] }
+
+instance Sum TSList where
+  sZero = TSList []
+  sSum  = TSList . concat . map unTSList
 
 data FunctorW f a where
   FunctorW :: f a -> FunctorW f a
@@ -30,9 +36,10 @@ data ApplicativeW f a where
   Pure :: a -> ApplicativeW f a
   Apply :: ApplicativeW f (a -> b) -> ApplicativeW f a -> ApplicativeW f b
 
-data SumFW f a where
-  SumFW :: f a -> SumFW f a
-  Sum :: [f a] -> SumFW f a
+data SumW f a where
+  SumW :: f a -> SumW f a
+  Sum :: [SumW f a] -> SumW f a
+  Zero :: SumW f a
 
 data SchemaB a where
   SString :: Maybe Text -> SchemaB Text
@@ -52,9 +59,14 @@ instance Applicative (ApplicativeW f) where
   pure = Pure
   (<*>) = Apply
 
-data OneOfFields a where
-  OneFields :: [(Text, Schema a)] -> OneOfFields a
-  OneField :: (Text, Schema a) -> OneOfFields a
+instance Sum (SumW f) where
+  sZero = Zero
+  sSum = Sum
+
+data OneOfFieldsB a where
+  OneField :: (Text, Schema a) -> OneOfFieldsB a
+
+type OneOfFields = SumW OneOfFieldsB
 
 data OneOf a where
   OneOf :: OneOfFields a -> OneOf a
@@ -77,6 +89,14 @@ onApplicativeW f = \case
   ApplicativeW b -> f b
   Pure x -> pure x
   g `Apply` x -> onApplicativeW f g <*> onApplicativeW f x
+
+onSumW :: Sum g
+       => (forall a. f a -> g a)
+       -> SumW f b -> g b
+onSumW f = \case
+  SumW b -> f b
+  Sum bs -> sSum (map (onSumW f) bs)
+  Zero   -> sZero
 
 merge :: Schema a -> Maybe A.Value -> Maybe a
 merge = flip $ \mv -> onFunctorW $ \case
@@ -111,8 +131,9 @@ mergeOneOf oneOf =
                 merge schema (Just fieldOther)
             _ -> Nothing
 
-oneFields (OneFields fields) = fields
-oneFields (OneField field) = [field]
+oneFields :: OneOfFields a -> [(Text, Schema a)]
+oneFields = unTSList . onSumW (\case
+  OneField field -> TSList [field])
 
 data M a = M (HM.HashMap Text A.Value -> Maybe a, [Text])
 
@@ -177,7 +198,12 @@ helpOneOf = \case
     *> pure undefined -- Yeah, that's a bit weird
 
 oneOfDefault :: (Text, Schema a) -> [(Text, Schema a)] -> Schema a
-oneOfDefault t ts = FunctorW (SOneOf (OneOfDefault t (OneFields ts)))
+oneOfDefault def =
+  FunctorW
+  . SOneOf
+  . OneOfDefault def
+  . sSum
+  . map (SumW . OneField)
 
 allField :: Text -> Schema a -> AllOf a
 allField t = ApplicativeW . AllField t
