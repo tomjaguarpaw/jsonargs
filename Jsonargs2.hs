@@ -10,9 +10,8 @@ import qualified Data.Text
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Set
 import           Data.Scientific (Scientific)
-import           Control.Applicative (liftA2, Const(Const), getConst, empty)
+import           Control.Applicative (liftA2, Const(Const), getConst)
 import           Data.Monoid ((<>))
-import           Data.Foldable (traverse_, asum)
 
 -- { New class
 
@@ -113,32 +112,32 @@ data AllOfB a where
 
 merge :: Schema a -> Maybe A.Value -> Maybe a
 merge = flip $ \mValue -> onFunctorW $ \case
-    SString default_ -> case mValue of
-      Nothing           -> default_
+    SString default' -> case mValue of
+      Nothing           -> default'
       Just (A.String t) -> Just t
       Just _            -> Nothing
-    SNumber default_ -> case mValue of
-      Nothing           -> default_
+    SNumber default' -> case mValue of
+      Nothing           -> default'
       Just (A.Number n) -> Just n
       Just _            -> Nothing
-    SOneOf oneOf -> mergeOneOf oneOf mValue
-    SAllOf allOf -> mergeAllOf allOf mValue
+    SOneOf oneOf' -> mergeOneOf oneOf' mValue
+    SAllOf allOf' -> mergeAllOf allOf' mValue
 
 mergeOneOf :: OneOf a -> Maybe A.Value -> Maybe a
 mergeOneOf oneOf = \case
-  Nothing -> default_
+  Nothing -> default'
   Just a  -> case a of
     A.Object hm -> case fields hm of
-      None -> default_
+      None -> default'
       Many -> Nothing
       One field fieldOther -> do
         schema <- lookup field (oneOfFields oneOf)
         merge schema (Just fieldOther)
     _ -> Nothing
 
-  where default_ = case oneOf of
+  where default' = case oneOf of
           OneOf _ -> Nothing
-          OneOfDefault (defField, defSchema) _ ->
+          OneOfDefault (_, defSchema) _ ->
             merge defSchema Nothing
 
         oneOfFields :: OneOf a -> [(Text, Schema a)]
