@@ -185,19 +185,19 @@ mergeAllOf s = \case
 data ComputeTarget = GPU Scientific Text | CPU Scientific | TPU Text
                    deriving Eq
 
-
 mapConst :: (a -> c) -> Const a b -> Const c b
 mapConst f (Const a) = Const (f a)
 
 help :: Schema a -> [Text]
-help = getConst . help'
+help = getConst . helpC
 
-help' :: Schema a -> Const [Text] a
-help' = onFunctorW $ \case
-  SString mt -> Const (["<string>" <> maybe "" (\t -> " (default is \"" <> t <> "\")") mt])
-  SNumber mn -> Const (["<number>" <> maybe "" (\t -> " (default is " <> Data.Text.pack (show t) <> ")") mn])
+helpC :: Schema a -> Const [Text] a
+helpC = onFunctorW $ \case
+  SString mt -> Const ["<string>" <> defaultIs (\t -> "\"" <> t <> "\"") mt]
+  SNumber mn -> Const ["<number>" <> defaultIs (Data.Text.pack . show) mn]
   SOneOf x   -> Const ["One of"] *> helpOneOf x
   SAllOf x   -> Const ["All of"] *> helpAllOf x
+  where defaultIs f mt = maybe "" (\t -> " (default is " <> f t <> ")") mt
 
 helpAllOf :: AllOf a -> Const [Text] a
 helpAllOf = onApplicativeW $ \case
@@ -206,7 +206,8 @@ helpAllOf = onApplicativeW $ \case
 helpFieldSchema :: Text -> (Text, Schema a) -> Const [Text] a
 helpFieldSchema extra (field, schema) =
   Const ([ "\"" <> field <> "\":" <> extra])
-  *> mapConst (map ((Data.Text.pack "    ") <>)) (help' schema)
+  *> (mapConst . map) (indent 4) (helpC schema)
+  where indent n = (Data.Text.pack (replicate n ' ') <>)
 
 helpOneOfFields :: Text -> OneOfFields a -> Const [Text] a
 helpOneOfFields extra = onSumW $ \case
