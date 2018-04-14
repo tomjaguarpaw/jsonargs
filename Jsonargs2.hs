@@ -92,13 +92,12 @@ merge = flip $ \mv -> onFunctorW $ \case
     SAllOf s' -> mergeAllOf s' mv
 
 mergeOneOf :: OneOf a -> Maybe A.Value -> Maybe a
-mergeOneOf = \case
-  OneOf (OneFields l') ->
-    let (def, l) = (Nothing, l')
-    in cont def l
-  OneOfDefault (defField, defSchema) (OneFields l') ->
-    let (def, l) = (merge defSchema Nothing,
-                    ((defField, defSchema) : l'))
+mergeOneOf oneOf =
+  let (def, l) = case oneOf of
+        OneOf ofs -> (Nothing, oneFields ofs)
+        OneOfDefault (defField, defSchema) ofs ->
+          (merge defSchema Nothing,
+            ((defField, defSchema) : oneFields ofs))
     in cont def l
 
   where cont def l = \case
@@ -111,6 +110,9 @@ mergeOneOf = \case
                 schema <- lookup field l
                 merge schema (Just fieldOther)
             _ -> Nothing
+
+        oneFields (OneFields fields) = fields
+        oneFields (OneField field) = [field]
 
 data M a = M (HM.HashMap Text A.Value -> Maybe a, [Text])
 
