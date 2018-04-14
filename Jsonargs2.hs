@@ -178,24 +178,26 @@ help' = onFunctorW $ \case
   SOneOf x   -> Const ["One of"] *> helpOneOf x
   SAllOf x   -> Const ["All of"] *> helpAllOf x
 
+helpAllOf :: AllOf a -> Const [Text] a
+helpAllOf = onApplicativeW $ \case
+  AllField field schema -> helpFieldSchema "" (field, schema)
+
 helpFieldSchema :: Text -> (Text, Schema a) -> Const [Text] a
 helpFieldSchema extra (field, schema) =
   Const ([ "\"" <> field <> "\":" <> extra])
   *> mapConst (map ((Data.Text.pack "    ") <>)) (help' schema)
 
-helpAllOf :: AllOf a -> Const [Text] a
-helpAllOf = onApplicativeW $ \case
-  AllField field schema -> helpFieldSchema "" (field, schema)
+helpOneOfFields :: Text -> OneOfFields a -> Const [Text] a
+helpOneOfFields extra = onSumW $ \case
+  OneField oneField -> helpFieldSchema extra oneField
 
 helpOneOf :: OneOf a -> Const [Text] a
 helpOneOf = \case
-  OneOf ofs ->
-    traverse_ (helpFieldSchema "") (oneFields ofs)
-    *> pure undefined -- Yeah, that's a bit weird
-  OneOfDefault defaults_ ofs ->
-    helpFieldSchema " (default)" defaults_
-    *> traverse_ (helpFieldSchema "") (oneFields ofs)
-    *> pure undefined -- Yeah, that's a bit weird
+  OneOf ofs -> helpOneOfFields "" ofs
+  OneOfDefault defaults_ ofs -> sSum
+    [ helpFieldSchema " (default)" defaults_
+    , helpOneOfFields "" ofs
+    ]
 
 oneOfDefault :: (Text, Schema a) -> [(Text, Schema a)] -> Schema a
 oneOfDefault def =
