@@ -114,9 +114,9 @@ data AllOfB a where
 merge :: Schema a -> Maybe A.Value -> Maybe a
 merge = flip $ \mv -> onFunctorW $ \case
     SString mText -> case mv of
-      Nothing -> mText
+      Nothing           -> mText
       Just (A.String t) -> Just t
-      _          -> Nothing
+      Just _            -> Nothing
     SNumber mNumber -> case mv of
       Nothing -> mNumber
       Just (A.Number n) -> Just n
