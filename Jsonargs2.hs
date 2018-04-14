@@ -13,6 +13,14 @@ import           Control.Applicative (liftA2, Const(Const), getConst)
 import           Data.Monoid ((<>))
 import           Data.Foldable (traverse_)
 
+class Sum f where
+  sZero :: f a
+  sSum :: [f a] -> f a
+
+instance Monoid m => Sum (Const m) where
+  sZero = Const mempty
+  sSum = Const . mconcat . map getConst
+
 data FunctorW f a where
   FunctorW :: f a -> FunctorW f a
   Fmap :: (a -> b) -> FunctorW f a -> FunctorW f b
@@ -21,6 +29,10 @@ data ApplicativeW f a where
   ApplicativeW :: f a -> ApplicativeW f a
   Pure :: a -> ApplicativeW f a
   Apply :: ApplicativeW f (a -> b) -> ApplicativeW f a -> ApplicativeW f b
+
+data SumFW f a where
+  SumFW :: f a -> SumFW f a
+  Sum :: [f a] -> SumFW f a
 
 data SchemaB a where
   SString :: Maybe Text -> SchemaB Text
@@ -40,9 +52,13 @@ instance Applicative (ApplicativeW f) where
   pure = Pure
   (<*>) = Apply
 
+data OneOfFields a where
+  OneFields :: [(Text, Schema a)] -> OneOfFields a
+  OneField :: (Text, Schema a) -> OneOfFields a
+
 data OneOf a where
-  OneOf :: [(Text, Schema a)] -> OneOf a
-  OneOfDefault :: (Text, Schema a) -> [(Text, Schema a)] -> OneOf a
+  OneOf :: OneOfFields a -> OneOf a
+  OneOfDefault :: (Text, Schema a) -> OneOfFields a -> OneOf a
 
 type AllOf = ApplicativeW AllOfB
 
@@ -77,26 +93,24 @@ merge = flip $ \mv -> onFunctorW $ \case
 
 mergeOneOf :: OneOf a -> Maybe A.Value -> Maybe a
 mergeOneOf = \case
-  OneOf l -> \case
-    Nothing -> Nothing
-    Just a  -> case a of
-      A.Object hm -> case HM.toList hm of
-        []      -> Nothing
-        (_:_:_) -> Nothing
-        [(field, fieldOther)] -> do
-          schema <- lookup field l
-          merge schema (Just fieldOther)
-      _ -> Nothing
-  OneOfDefault (defField, defSchema) l -> \case
-    Nothing -> merge defSchema Nothing
-    Just a -> case a of
-      A.Object hm -> case HM.toList hm of
-        [] -> merge defSchema Nothing
-        (_:_:_) -> Nothing
-        [(field, fieldOther)] -> do
-          schema <- lookup field ((defField, defSchema) : l)
-          merge schema (Just fieldOther)
-      _ -> Nothing
+  OneOf (OneFields l') ->
+    let (def, l) = (Nothing, l')
+    in cont def l
+  OneOfDefault (defField, defSchema) (OneFields l') ->
+    let (def, l) = (merge defSchema Nothing,
+                    ((defField, defSchema) : l'))
+    in cont def l
+
+  where cont def l = \case
+          Nothing -> def
+          Just a  -> case a of
+            A.Object hm -> case HM.toList hm of
+              []      -> def
+              (_:_:_) -> Nothing
+              [(field, fieldOther)] -> do
+                schema <- lookup field l
+                merge schema (Just fieldOther)
+            _ -> Nothing
 
 data M a = M (HM.HashMap Text A.Value -> Maybe a, [Text])
 
@@ -152,15 +166,16 @@ helpAllOf = onApplicativeW $ \case
 
 helpOneOf :: OneOf a -> Const [Text] a
 helpOneOf = \case
-  OneOf fields_schemas -> traverse_ (helpFieldSchema "") fields_schemas
-                          *> pure undefined -- Yeah, that's a bit weird
-  OneOfDefault defaults_ fields_schemas ->
+  OneOf (OneFields fields_schemas) ->
+    traverse_ (helpFieldSchema "") fields_schemas
+    *> pure undefined -- Yeah, that's a bit weird
+  OneOfDefault defaults_ (OneFields fields_schemas) ->
     helpFieldSchema " (default)" defaults_
     *> traverse_ (helpFieldSchema "") fields_schemas
     *> pure undefined -- Yeah, that's a bit weird
 
 oneOfDefault :: (Text, Schema a) -> [(Text, Schema a)] -> Schema a
-oneOfDefault t ts = FunctorW (SOneOf (OneOfDefault t ts))
+oneOfDefault t ts = FunctorW (SOneOf (OneOfDefault t (OneFields ts)))
 
 allField :: Text -> Schema a -> AllOf a
 allField t = ApplicativeW . AllField t
@@ -240,6 +255,7 @@ main = do
   assert $ merge size Nothing == Just Large
 
   let ct_defaults = [ (Nothing, GPU 0 "local")
+                    , (Just (d []), GPU 0 "local")
                     , (Just (d ["gpu" .= d []]), GPU 0 "local")
                     , (Just (d ["gpu" .= d ["gpu_id" .= n 1]]), GPU 1 "local")
                     , (Just (d ["cpu" .= d []]), CPU 1)
