@@ -199,7 +199,7 @@ helpC = onFunctorW $ \case
   SNumber mn -> Const ["<number>" <> defaultIs (Data.Text.pack . show) mn]
   SOneOf x   -> Const ["One of"] *> helpOneOf x
   SAllOf x   -> Const ["All of"] *> helpAllOf x
-  where defaultIs f mt = maybe "" (\t -> " (default is " <> f t <> ")") mt
+  where defaultIs f = maybe "" (\t -> " (default is " <> f t <> ")")
 
 helpAllOf :: AllOf a -> Const [Text] a
 helpAllOf = onApplicativeW $ \case
