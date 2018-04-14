@@ -148,8 +148,6 @@ mergeOneOf oneOf =
         oneFields = unTSList . onSumW (\case
            OneField field -> TSList [field])
 
-
-
 data Fields k v = None | One k v | Many
 
 fields :: HM.HashMap k v -> Fields k v
