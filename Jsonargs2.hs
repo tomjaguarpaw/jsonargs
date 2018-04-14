@@ -113,36 +113,38 @@ data AllOfB a where
 
 merge :: Schema a -> Maybe A.Value -> Maybe a
 merge = flip $ \mValue -> onFunctorW $ \case
-    SString mText -> case mValue of
-      Nothing           -> mText
+    SString default_ -> case mValue of
+      Nothing           -> default_
       Just (A.String t) -> Just t
       Just _            -> Nothing
-    SNumber mNumber -> case mValue of
-      Nothing           -> mNumber
+    SNumber default_ -> case mValue of
+      Nothing           -> default_
       Just (A.Number n) -> Just n
       Just _            -> Nothing
     SOneOf oneOf -> mergeOneOf oneOf mValue
     SAllOf allOf -> mergeAllOf allOf mValue
 
 mergeOneOf :: OneOf a -> Maybe A.Value -> Maybe a
-mergeOneOf oneOf =
-  let (def, l) = case oneOf of
-        OneOf ofs -> (Nothing, oneFields ofs)
-        OneOfDefault (defField, defSchema) ofs ->
-          (merge defSchema Nothing,
-            ((defField, defSchema) : oneFields ofs))
-    in cont def l
+mergeOneOf oneOf = \case
+  Nothing -> default_
+  Just a  -> case a of
+    A.Object hm -> case fields hm of
+      None -> default_
+      Many -> Nothing
+      One field fieldOther -> do
+        schema <- lookup field (oneOfFields oneOf)
+        merge schema (Just fieldOther)
+    _ -> Nothing
 
-  where cont def l = \case
-          Nothing -> def
-          Just a  -> case a of
-            A.Object hm -> case fields hm of
-              None -> def
-              Many -> Nothing
-              One field fieldOther -> do
-                schema <- lookup field l
-                merge schema (Just fieldOther)
-            _ -> Nothing
+  where default_ = case oneOf of
+          OneOf _ -> Nothing
+          OneOfDefault (defField, defSchema) _ ->
+            merge defSchema Nothing
+
+        oneOfFields :: OneOf a -> [(Text, Schema a)]
+        oneOfFields = \case
+          OneOf ofs                 -> oneFields ofs
+          OneOfDefault default' ofs -> default' : oneFields ofs
 
         oneFields :: OneOfFields a -> [(Text, Schema a)]
         oneFields = unTSList . onSumW (\case
