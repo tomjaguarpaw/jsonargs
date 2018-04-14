@@ -171,16 +171,17 @@ mergeAllOf'' = onApplicativeW $ \case
   AllField t schema -> M (merge schema . HM.lookup t, [t])
 
 mergeAllOf :: AllOf a -> Maybe A.Value -> Maybe a
-mergeAllOf s = \case
-  Nothing -> f HM.empty
-  Just (A.Object hm) -> if Data.Set.fromList (HM.keys hm)
-                           `Data.Set.isSubsetOf`
-                           Data.Set.fromList ts
-                        then f hm
-                        else Nothing
+mergeAllOf allOf' = \case
+  Nothing -> mergeObject HM.empty
+  Just (A.Object object) ->
+    if objectKeys `Data.Set.isSubsetOf` schemaKeys
+    then mergeObject object
+    else Nothing
+    where objectKeys = Data.Set.fromList (HM.keys object)
+          schemaKeys = Data.Set.fromList schemaKeysList
   Just _ -> Nothing
 
-  where M (f, ts) = mergeAllOf'' s
+  where M (mergeObject, schemaKeysList) = mergeAllOf'' allOf'
 
 
 data ComputeTarget = GPU Scientific Text | CPU Scientific | TPU Text
