@@ -111,8 +111,8 @@ mergeOneOf oneOf =
                 merge schema (Just fieldOther)
             _ -> Nothing
 
-        oneFields (OneFields fields) = fields
-        oneFields (OneField field) = [field]
+oneFields (OneFields fields) = fields
+oneFields (OneField field) = [field]
 
 data M a = M (HM.HashMap Text A.Value -> Maybe a, [Text])
 
@@ -168,12 +168,12 @@ helpAllOf = onApplicativeW $ \case
 
 helpOneOf :: OneOf a -> Const [Text] a
 helpOneOf = \case
-  OneOf (OneFields fields_schemas) ->
-    traverse_ (helpFieldSchema "") fields_schemas
+  OneOf ofs ->
+    traverse_ (helpFieldSchema "") (oneFields ofs)
     *> pure undefined -- Yeah, that's a bit weird
-  OneOfDefault defaults_ (OneFields fields_schemas) ->
+  OneOfDefault defaults_ ofs ->
     helpFieldSchema " (default)" defaults_
-    *> traverse_ (helpFieldSchema "") fields_schemas
+    *> traverse_ (helpFieldSchema "") (oneFields ofs)
     *> pure undefined -- Yeah, that's a bit weird
 
 oneOfDefault :: (Text, Schema a) -> [(Text, Schema a)] -> Schema a
