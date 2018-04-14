@@ -112,17 +112,17 @@ data AllOfB a where
 -- }
 
 merge :: Schema a -> Maybe A.Value -> Maybe a
-merge = flip $ \mv -> onFunctorW $ \case
-    SString mText -> case mv of
+merge = flip $ \mValue -> onFunctorW $ \case
+    SString mText -> case mValue of
       Nothing           -> mText
       Just (A.String t) -> Just t
       Just _            -> Nothing
-    SNumber mNumber -> case mv of
-      Nothing -> mNumber
+    SNumber mNumber -> case mValue of
+      Nothing           -> mNumber
       Just (A.Number n) -> Just n
-      _          -> Nothing
-    SOneOf s' -> mergeOneOf s' mv
-    SAllOf s' -> mergeAllOf s' mv
+      Just _            -> Nothing
+    SOneOf oneOf -> mergeOneOf oneOf mValue
+    SAllOf allOf -> mergeAllOf allOf mValue
 
 mergeOneOf :: OneOf a -> Maybe A.Value -> Maybe a
 mergeOneOf oneOf =
