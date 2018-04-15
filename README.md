@@ -1,5 +1,7 @@
 # stargazer
 
+Structurally typed arguments and zero extra rubbish
+
 ```haskell
 -- Stargazer's API
 string  :: Schema String
