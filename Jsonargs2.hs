@@ -3,6 +3,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE Rank2Types #-}
 
+module Jsonargs2 where
+
 import           Control.Category ((>>>))
 import qualified Data.Aeson as A
 import           Data.Text (Text)
