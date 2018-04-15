@@ -163,9 +163,13 @@ parseOneOf (OneOf oneOf') tokens = case tokens of
 parseString :: [Token] -> Either String String
 parseString = \case
   [TArg (Arg a)] -> Right a
-  [] -> Left "Expected something but found nothing"
-  (TOpt _):_ -> Left "Expected a string but found an option"
-  (TArg _):_:_ -> Left "Had unexpected leftovers"
+  [] -> Left "Expected a string but found nothing"
+  (TOpt (Opt o)):_ -> Left ("Expected a string but found option --" ++ o)
+  (TArg (Arg a)):token:_ -> Left ("Didn't expect to see " ++ s ++ " "
+                                 ++ "after " ++ a)
+    where s = case token of
+            TOpt (Opt o) -> o
+            TArg (Arg a) -> a
   
 name :: Schema String
 name = string
