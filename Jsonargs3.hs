@@ -237,4 +237,3 @@ main = do
   assert $ succeeds files [] []
   assert $ fails files [o "file"]
   assert $ succeeds files [o "file", a "filename"] ["filename"]
-
