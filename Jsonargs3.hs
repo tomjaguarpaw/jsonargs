@@ -108,7 +108,7 @@ parseAllOfB = \case
           Nothing -> Left ("Expected --" ++ field)
           Just [] -> error "My brain exploded -- didn't get any tokens"
           Just [tokens] -> parse schema tokens
-          Just (_:_:_) -> Left ("Got too many instances of " ++ field),
+          Just (_:_:_) -> Left ("Got too many instances of --" ++ field),
        [field])
   AllOfMany field schema ->
     M (\m -> case Data.Map.lookup field m of
