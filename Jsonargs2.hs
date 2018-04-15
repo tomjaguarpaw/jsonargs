@@ -144,8 +144,8 @@ mergeOneOf oneOf = \case
 
         oneOfFields :: OneOf a -> [(Text, Schema a)]
         oneOfFields = \case
-          OneOf ofs                 -> oneFields ofs
-          OneOfDefault default' ofs -> default' : oneFields ofs
+          OneOf ofs                  -> oneFields ofs
+          OneOfDefault default'' ofs -> default'' : oneFields ofs
 
         oneFields :: OneOfFields a -> [(Text, Schema a)]
         oneFields = unTSList . onSumW (\case
