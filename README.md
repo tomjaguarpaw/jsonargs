@@ -12,8 +12,8 @@ nothing :: Schema ()
 -- A sum type is built from a list of possible options.
 oneOf   :: [(String, Schema a)] -> Schema a
 
--- A product type is build from a list of possible options, composed
--- applicatively.
+-- A product type is build from a list of possible options,
+-- composed applicatively.
 allOf :: AllOf a -> Schema a
 
 -- The fields of a product type can be singletons or lists.
@@ -23,8 +23,8 @@ many  :: String -> Schema a -> AllOf [a]
 
 -- Using the Stargazer API
 
--- We're going to parse command line options to set up this ADT which
-   describes how to build a set of Haskell packages.
+-- We're going to parse command line options to set up this ADT
+-- which describes how to build a set of Haskell packages.
 
 -- The top level of the ADT is `Install`
 data Install = Install { tool_    :: Tool
@@ -47,8 +47,8 @@ data Build = OldBuild | NewBuild
 
 -- Writing a schema to parse into our ADT
 
--- An install must have exactly one `--tool` and can have any number
--- of `--package`s
+-- An install must have exactly one `--tool` and can have any
+-- number of `--package`s
 install :: Schema Install
 install = allOf (Install <$> once "tool" tool
                          <*> many "package" package)
