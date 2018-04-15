@@ -197,13 +197,13 @@ main = do
   assert $ parse nothing [] == Right ()
   assert $ isLeft (parse nothing [TOpt (Opt "foo")])
   assert $ isLeft (parse nothing [TArg (Arg "foo")])
-  
+
   assert $ isLeft (parse large [])
   assert $ isLeft (parse large [TOpt (Opt "foo")])
   assert $ isLeft (parse large [TArg (Arg "foo")])
   assert $ parse large [TOpt (Opt "large")] == Right Large
   assert $ parse large [TOpt (Opt "small")] == Right Small
-  
+
   assert $ isLeft (parse login [])
   assert $ isLeft (parse login [TOpt (Opt "foo")])
   assert $ isLeft (parse login [TArg (Arg "foo")])
