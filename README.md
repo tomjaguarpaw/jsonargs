@@ -1,4 +1,4 @@
-# schemaargs
+# stargazer
 
 ```
 % ./example
