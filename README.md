@@ -12,7 +12,7 @@ nothing :: Schema ()
 -- A sum type is built from a list of possible options.
 oneOf :: [(String, Schema a)] -> Schema a
 
--- A product type is build from a list of possible options,
+-- A product type is built from a list of possible options,
 -- composed applicatively.
 allOf :: AllOf a -> Schema a
 
