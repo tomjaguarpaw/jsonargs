@@ -26,7 +26,8 @@ many  :: String -> Schema a -> AllOf [a]
 -- We're going to parse command line options to set up this ADT
 -- which describes how to build a set of Haskell packages.
 
--- The top level of the ADT is `Install`
+-- The top level of the ADT is `Install` and we nest some other
+-- types inside it.
 data Install = Install { tool_    :: Tool
                        , packages :: [Package]
                        }
@@ -53,22 +54,26 @@ install :: Schema Install
 install = allOf (Install <$> once "tool" tool
                          <*> many "package" package)
 
+-- stack has a target, cabal has a target and a build
 tool :: Schema Tool
 tool = oneOf [ ("stack", allOf (Stack <$> once "target" target))
              , ("cabal", allOf (Cabal <$> once "target" target
                                       <*> once "build"  build))
              ]
 
+-- A target is x86 or x64
 target :: Schema Target
 target = oneOf [ ("x86", X86 <$ nothing)
                , ("x64", X64 <$ nothing)
                ]
 
+-- A build is old-build or new-build
 build :: Schema Build
 build = oneOf [ ("old-build", OldBuild <$ nothing)
               , ("new-build", NewBuild <$ nothing)
               ]
 
+-- A package has a name and a version
 package :: Schema Package
 package = allOf (Package <$> once "name" string
                          <*> once "version" string)
