@@ -113,7 +113,7 @@ parseAllOfB = \case
        [field])
 
 parseAllOf :: AllOf a -> [Token] -> Either String a
-parseAllOf allOf tokens = do
+parseAllOf allOf' tokens = do
   binnedFields <- case eBinnedFields of
     Left _ -> Left ("Was expecting an option but got an argument "
                      ++ "or an option I didn't expect")
@@ -121,7 +121,7 @@ parseAllOf allOf tokens = do
   parseObject binnedFields
   -- TODO: We should check that two AllOfs are not parsing the same
   -- field name
-  where M (parseObject, fields) = onApplicativeW parseAllOfB allOf
+  where M (parseObject, fields) = onApplicativeW parseAllOfB allOf'
         choose = \case
           TArg a -> Right (TArg a)
           TOpt (Opt o) -> if o `elem` fields
@@ -176,9 +176,21 @@ large =  oneOf [ ("large", fmap (const Large) nothing)
                , ("small", fmap (const Small) nothing)
                ]
 
+once :: String -> Schema a -> AllOf a
+once field parser = ApplicativeW (AllOfOnce field parser)
+
+many :: String -> Schema a -> AllOf [a]
+many field parser = ApplicativeW (AllOfMany field parser)
+
+allOf :: AllOf a -> Schema a
+allOf = FunctorW . SAllOf
+
 login :: Schema (String, String)
-login = FunctorW (SAllOf ((,) <$> ApplicativeW (AllOfOnce "username" string)
-                              <*> ApplicativeW (AllOfOnce "password" string)))
+login = allOf ((,) <$> once "username" string
+                   <*> once "password" string)
+
+files :: Schema [String]
+files = allOf (many "file" string)
 
 isLeft :: Either a b -> Bool
 isLeft (Left _)  = True
@@ -190,28 +202,39 @@ isRight (Right _) = True
 
 main :: IO ()
 main = do
-  assert $ isLeft (parse name [TOpt (Opt "foo")])
-  assert $ isLeft (parse name [])
-  assert $ parse name [TArg (Arg "foo")] == Right "foo"
+  let o = TOpt . Opt
+      a = TArg . Arg
 
-  assert $ parse nothing [] == Right ()
-  assert $ isLeft (parse nothing [TOpt (Opt "foo")])
-  assert $ isLeft (parse nothing [TArg (Arg "foo")])
+      fails schema tokens = isLeft (parse schema tokens)
+      succeeds schema tokens expected = parse schema tokens == Right expected
 
-  assert $ isLeft (parse large [])
-  assert $ isLeft (parse large [TOpt (Opt "foo")])
-  assert $ isLeft (parse large [TArg (Arg "foo")])
-  assert $ parse large [TOpt (Opt "large")] == Right Large
-  assert $ parse large [TOpt (Opt "small")] == Right Small
+  assert $ fails name [o "foo"]
+  assert $ fails name []
+  assert $ succeeds name [a "foo"] "foo"
 
-  assert $ isLeft (parse login [])
-  assert $ isLeft (parse login [TOpt (Opt "foo")])
-  assert $ isLeft (parse login [TArg (Arg "foo")])
-  assert $ isLeft (parse login [TOpt (Opt "username")])
-  assert $ isLeft (parse login [TOpt (Opt "username"), TArg (Arg "foo")])
-  assert $ parse login [TOpt (Opt "username"), TArg (Arg "foo")
-                       ,TOpt (Opt "password"), TArg (Arg "bar")]
-              == Right ("foo", "bar")
-  assert $ parse login [TOpt (Opt "password"), TArg (Arg "baz")
-                       ,TOpt (Opt "username"), TArg (Arg "quux")]
-              == Right ("quux", "baz")
+  assert $ succeeds nothing [] ()
+  assert $ fails nothing [o "foo"]
+  assert $ fails nothing [a "foo"]
+
+  assert $ fails large []
+  assert $ fails large [o "foo"]
+  assert $ fails large [a "foo"]
+  assert $ succeeds large [o "large"] Large
+  assert $ succeeds large [o "small"] Small
+
+  assert $ fails login []
+  assert $ fails login [o "foo"]
+  assert $ fails login [a "foo"]
+  assert $ fails login [o "username"]
+  assert $ fails login [o "username", a "foo"]
+  assert $ succeeds login [ o "username", a "foo"
+                          , o "password", a "bar"]
+              ("foo", "bar")
+  assert $ succeeds login [ o "password", a "baz"
+                          , o "username", a "quux"]
+              ("quux", "baz")
+
+  assert $ succeeds files [] []
+  assert $ fails files [o "file"]
+  assert $ succeeds files [o "file", a "filename"] ["filename"]
+
