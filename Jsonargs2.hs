@@ -280,7 +280,7 @@ cluster = string (Just "local")
 num_cpus :: Schema Scientific
 num_cpus = number (Just 1)
 
-data Size = Large | Small deriving Eq
+data Size = Large | Small deriving (Eq, Show)
 
 int0 :: Schema Scientific
 int0 = number (Just 0)
@@ -333,4 +333,4 @@ main = do
   putStrLn ""
   putStrLn ""
 
-  where assert b = if b then return () else error "Assertion failure"
+assert b = if b then return () else error "Assertion failure"
