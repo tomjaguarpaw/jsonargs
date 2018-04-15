@@ -58,6 +58,8 @@ package = allOf (Package <$> once "name" string
                          <*> once "version" string)
 ```
 
+This is what happens when you use it.
+
 ```
 % ./example
 error: Expected --tool
