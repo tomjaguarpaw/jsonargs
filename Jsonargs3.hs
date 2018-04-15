@@ -192,6 +192,11 @@ login = allOf ((,) <$> once "username" string
 files :: Schema [String]
 files = allOf (many "file" string)
 
+multiplex :: Schema (String, [String], [String])
+multiplex = allOf ((,,) <$> once "codec" string
+                        <*> many "file" string
+                        <*> many "output" string)
+
 isLeft :: Either a b -> Bool
 isLeft (Left _)  = True
 isLeft (Right _) = False
@@ -237,3 +242,26 @@ main = do
   assert $ succeeds files [] []
   assert $ fails files [o "file"]
   assert $ succeeds files [o "file", a "filename"] ["filename"]
+
+  assert $ fails multiplex []
+  assert $ succeeds multiplex [o "codec", a "mp3"] ("mp3", [], [])
+  assert $ succeeds multiplex [o "codec", a "mp3"
+                              ,o "file", a "file1"
+                              ,o "file", a "file1"]
+                              ("mp3", ["file1", "file1"], [])
+  assert $ succeeds multiplex [o "codec", a "mp3"
+                              ,o "file", a "file1"
+                              ,o "file", a "file2"
+                              ,o "file", a "file1"]
+                              ("mp3", ["file1", "file2", "file1"], [])
+  assert $ succeeds multiplex [o "codec", a "mp3"
+                              ,o "file", a "file1"
+                              ,o "output", a "/dev/audio"
+                              ,o "file", a "file2"
+                              ,o "file", a "file1"]
+                              ("mp3", ["file1", "file2", "file1"], ["/dev/audio"])
+  assert $ fails multiplex    [o "codec", a "mp3"
+                              ,o "file", a "file1"
+                              ,o "output"
+                              ,o "file", a "file2"
+                              ,o "file", a "file1"]
