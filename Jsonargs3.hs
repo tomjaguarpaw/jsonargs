@@ -121,8 +121,10 @@ parseAllOf :: AllOf a -> [Token] -> Either String a
 parseAllOf allOf' tokens = do
   binnedFields <- case eBinnedFields of
     Left c -> case c of
-      TOpt (Opt o) -> Left ("Didn't expect option --" ++ o)
-      TArg (Arg a) -> Left ("Didn't expect an arg but got " ++ a)
+      TOpt (Opt o) -> Left ("Didn't expect option --" ++ o ++ "\n"
+                           ++ iKnowAbout)
+      TArg (Arg a) -> Left ("Didn't expect an arg but got " ++ a ++ "\n"
+                           ++ iKnowAbout)
     Right r -> return r
   parseObject binnedFields
   -- TODO: We should check that two AllOfs are not parsing the same
@@ -134,6 +136,9 @@ parseAllOf allOf' tokens = do
                           then Left o
                           else Right (TOpt (Opt o))
         eBinnedFields = bin3 choose tokens
+        iKnowAbout = "I know about "
+                     ++ Data.List.intercalate ", "
+                          (map ("--"++) fields)
 
 data SSList a = SSList { unSSList :: [(String, Schema a)] }
 
