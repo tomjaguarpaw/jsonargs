@@ -1,5 +1,63 @@
 # stargazer
 
+```haskell
+-- Stargazer's API
+string  :: Schema String
+nothing :: Schema ()
+
+oneOf   :: [(String, Schema a)] -> Schema a
+
+allOf :: AllOf a -> Schema a
+
+once  :: String -> Schema a -> AllOf a
+many  :: String -> Schema a -> AllOf [a]
+
+
+-- Set up our configuration ADT
+data Install = Install { tool_    :: Tool
+                       , packages :: [Package]
+                       }
+  deriving Show
+
+data Tool = Stack Target
+          | Cabal Target Build
+  deriving Show
+
+data Package = Package String String
+  deriving Show
+
+data Target = X86 | X64
+  deriving Show
+
+data Build = OldBuild | NewBuild
+  deriving Show
+
+-- Write a schema to parse into our ADT
+install :: Schema Install
+install = allOf (Install <$> once "tool" tool
+                         <*> many "package" package)
+
+tool :: Schema Tool
+tool = oneOf [ ("stack", allOf (Stack <$> once "target" target))
+             , ("cabal", allOf (Cabal <$> once "target" target
+                                      <*> once "build"  build))
+             ]
+
+target :: Schema Target
+target = oneOf [ ("x86", X86 <$ nothing)
+               , ("x64", X64 <$ nothing)
+               ]
+
+build :: Schema Build
+build = oneOf [ ("old-build", OldBuild <$ nothing)
+              , ("new-build", NewBuild <$ nothing)
+              ]
+
+package :: Schema Package
+package = allOf (Package <$> once "name" string
+                         <*> once "version" string)
+```
+
 ```
 % ./example
 error: Expected --tool
