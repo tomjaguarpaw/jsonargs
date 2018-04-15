@@ -333,4 +333,5 @@ main = do
   putStrLn ""
   putStrLn ""
 
+assert :: Bool -> IO ()
 assert b = if b then return () else error "Assertion failure"

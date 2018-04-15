@@ -1,12 +1,15 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 
+module Jsonargs3 where
+
 import Jsonargs2 (FunctorW(FunctorW),
                   ApplicativeW(ApplicativeW), SumW(Sum, SumW), Sum(..),
                   onApplicativeW, onSumW, onFunctorW,
                   Size(..),
                   assert)
 import Control.Applicative (liftA2)
+import qualified System.Environment
 
 import qualified Data.Map
 
@@ -31,12 +34,12 @@ type OneOfFields = SumW OneOfFieldsB
 data OneOfFieldsB a where
   OneField :: String -> Schema a -> OneOfFieldsB a
 
-data Opt = Opt String deriving (Ord, Eq)
-data Arg = Arg String deriving (Ord, Eq)
+data Opt = Opt String deriving (Ord, Eq, Show)
+data Arg = Arg String deriving (Ord, Eq, Show)
 
 data Token = TOpt Opt
            | TArg Arg
-  deriving (Ord, Eq)
+  deriving (Ord, Eq, Show)
 
 
 bin :: (a -> Either b c)
@@ -192,6 +195,7 @@ login = allOf ((,) <$> once "username" string
 files :: Schema [String]
 files = allOf (many "file" string)
 
+
 multiplex :: Schema (String, [String], [String])
 multiplex = allOf ((,,) <$> once "codec" string
                         <*> many "file" string
@@ -265,3 +269,16 @@ main = do
                               ,o "output"
                               ,o "file", a "file2"
                               ,o "file", a "file1"]
+
+tokenOfString :: String -> Token
+tokenOfString s = case s of
+  '-':'-':(opt@_) -> TOpt (Opt opt)
+  arg          -> TArg (Arg arg)
+
+mainExample :: IO ()
+mainExample = do
+  args <- System.Environment.getArgs
+  let tokenisedArgs = map tokenOfString args
+  case parse multiplex tokenisedArgs of
+    Left e  -> putStrLn ("error: " ++ e)
+    Right r -> print r
