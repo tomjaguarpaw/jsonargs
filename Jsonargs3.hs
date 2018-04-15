@@ -10,8 +10,10 @@ import Jsonargs2 (FunctorW(FunctorW),
                   assert)
 import Control.Applicative (liftA2)
 import qualified System.Environment
+import qualified Data.List
 
 import qualified Data.Map
+import           Data.Functor ((<$))
 
 type Schema = FunctorW SchemaB
 
@@ -74,12 +76,12 @@ bin2 f b as dm = case bin f as of
 bin3 :: Ord b
      => (a -> Either b c)
      -> [a]
-     -> Either String (Data.Map.Map b [[c]])
+     -> Either c (Data.Map.Map b [[c]])
 bin3 f as = case as of
   [] -> return Data.Map.empty
   (a:as') -> case f a of
     Left b -> return (bin2 f b as' Data.Map.empty)
-    Right _ -> Left "Got a c first"
+    Right c -> Left c
 
 data M a = M (Data.Map.Map String [[Token]] -> Either String a, [String])
 
@@ -103,7 +105,7 @@ parseAllOfB :: AllOfB a -> M a
 parseAllOfB = \case
   AllOfOnce field schema ->
     M (\m -> case Data.Map.lookup field m of
-          Nothing -> Left ("Expected " ++ field)
+          Nothing -> Left ("Expected --" ++ field)
           Just [] -> error "My brain exploded -- didn't get any tokens"
           Just [tokens] -> parse schema tokens
           Just (_:_:_) -> Left ("Got too many instances of " ++ field),
@@ -118,8 +120,9 @@ parseAllOfB = \case
 parseAllOf :: AllOf a -> [Token] -> Either String a
 parseAllOf allOf' tokens = do
   binnedFields <- case eBinnedFields of
-    Left _ -> Left ("Was expecting an option but got an argument "
-                     ++ "or an option I didn't expect")
+    Left c -> case c of
+      TOpt (Opt o) -> Left ("Didn't expect option --" ++ o)
+      TArg (Arg a) -> Left ("Didn't expect an arg but got " ++ a)
     Right r -> return r
   parseObject binnedFields
   -- TODO: We should check that two AllOfs are not parsing the same
@@ -140,7 +143,9 @@ instance Sum SSList where
 
 parseOneOf :: OneOf a -> [Token] -> Either String a
 parseOneOf (OneOf oneOf') tokens = case tokens of
-  [] -> Left "Nothing provided for a OneOf"
+  [] -> Left ("Expected one of "
+             ++ Data.List.intercalate ", "
+                  (map (("--" ++) . fst) fields_schemas))
   (TArg _):_ -> Left "Arg provided but expected option for a OneOf"
   (TOpt (Opt o)):rest -> case lookup o fields_schemas of
     Nothing -> Left (o ++ " is not one of the options I can parse")
@@ -200,6 +205,48 @@ multiplex :: Schema (String, [String], [String])
 multiplex = allOf ((,,) <$> once "codec" string
                         <*> many "file" string
                         <*> many "output" string)
+
+data Target = X86 | X64
+  deriving Show
+
+data Tool = Stack Target
+          | Cabal Target Build
+  deriving Show
+
+data Build = OldBuild | NewBuild
+  deriving Show
+
+data Package = Package String String
+  deriving Show
+
+data Install = Install { tool_    :: Tool
+                       , packages :: [Package]
+                       }
+  deriving Show
+
+install :: Schema Install
+install = allOf (Install <$> once "tool" tool
+                         <*> many "package" package)
+
+tool :: Schema Tool
+tool = oneOf [ ("stack", allOf (Stack <$> once "target" target))
+             , ("cabal", allOf (Cabal <$> once "target" target
+                                      <*> once "build"  build))
+             ]
+
+target :: Schema Target
+target = oneOf [ ("x86", X86 <$ nothing)
+               , ("x64", X64 <$ nothing)
+               ]
+
+build :: Schema Build
+build = oneOf [ ("old-build", OldBuild <$ nothing)
+              , ("new-build", NewBuild <$ nothing)
+              ]
+
+package :: Schema Package
+package = allOf (Package <$> once "name" string
+                         <*> once "version" string)
 
 isLeft :: Either a b -> Bool
 isLeft (Left _)  = True
@@ -279,6 +326,6 @@ mainExample :: IO ()
 mainExample = do
   args <- System.Environment.getArgs
   let tokenisedArgs = map tokenOfString args
-  case parse multiplex tokenisedArgs of
+  case parse install tokenisedArgs of
     Left e  -> putStrLn ("error: " ++ e)
     Right r -> print r
