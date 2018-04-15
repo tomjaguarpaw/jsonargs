@@ -65,3 +65,11 @@ structure again inside the program?
 * short and long versions of arguments
 
 * useful help
+
+## Counterpoints
+
+This is the only one I've found.
+
+> https://stackoverflow.com/questions/26299755/json-for-command-line-arguments
+
+I don't find it particularly convincing.
