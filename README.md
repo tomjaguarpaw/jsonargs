@@ -107,6 +107,16 @@ Install {tool_ = Cabal X86 NewBuild,
          packages = [Package "lens" "10.0.0.0" ,Package "aeson" "0.6.0.0"]}
 ```
 
+## To do
+
+All the goodies:
+
+* useful help
+
+* short and long versions of arguments
+
+* completion
+
 # jsonargs
 
 ## Rationale
