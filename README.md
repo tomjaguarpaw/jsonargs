@@ -1,3 +1,50 @@
+# schemaargs
+
+```
+% ./example
+error: Expected --tool
+
+% ./example --tool
+error: Expected one of --stack, --cabal
+
+% ./example --tool --cabal
+error: Expected --target
+
+% ./example --tool --cabal --target
+error: Expected one of --x86, --x64
+
+% ./example --tool --cabal --target --x86
+error: Expected --build
+
+% ./example --tool --cabal --target --x86 --build
+error: Expected one of --old-build, --new-build
+
+% ./example --tool --cabal --target --x86 --build --new-build
+Install {tool_ = Cabal X86 NewBuild, packages = []}
+
+% ./example --tool --cabal --target --x86 --build --new-build \
+            --package
+error: Expected --name
+
+% ./example --tool --cabal --target --x86 --build --new-build \
+            --package --name aeson
+error: Expected --version
+
+% ./example --tool --cabal --target --x86 --build --new-build --package \
+            --name aeson --version 0.6.0.0
+Install {tool_ = Cabal X86 NewBuild, packages = [Package "aeson" "0.6.0.0"]}
+
+% ./example --tool --cabal --target --x86 --build --new-build \
+            --package --name aeson --version 0.6.0.0 0.4.0.0
+error: Didn't expect to see 0.4.0.0 after 0.6.0.0
+
+% ./example --tool --cabal --target --x86 --build --new-build \
+            --package --name aeson --version 0.6.0.0 \
+	    --package --name lens --version 10.0.0.0
+Install {tool_ = Cabal X86 NewBuild,
+         packages = [Package "lens" "10.0.0.0" ,Package "aeson" "0.6.0.0"]}
+```
+
 # jsonargs
 
 ## Rationale
