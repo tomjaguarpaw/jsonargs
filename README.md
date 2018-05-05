@@ -1,6 +1,6 @@
 # stargazer
 
-Structurally typed arguments and zero extra rubbish
+Structurally typed arguments and zero extra rigmarole
 
 ```haskell
 -- Stargazer's, very small, API
