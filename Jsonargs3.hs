@@ -46,20 +46,20 @@ data Token = TOpt Opt
   deriving (Ord, Eq, Show)
 
 
-splitOn :: (a -> Either b c)
+splitOn :: (a -> Either c b)
         -> [a]
         -> ([c], Maybe (b, [a]))
 splitOn _ [] = ([], Nothing)
 splitOn f (a:as) = case f a of
-  Left b  -> ([], Just (b, as))
-  Right c -> let (cs, rest) = splitOn f as
+  Right b -> ([], Just (b, as))
+  Left c  -> let (cs, rest) = splitOn f as
              in (c:cs, rest)
 
 (|>) :: a -> (a -> c) -> c
 (|>) = flip ($)
 
 bin2 :: Ord b
-     => (a -> Either b c)
+     => (a -> Either c b)
      -> (b, [a])
      -> Data.Map.Map b [[c]]
      -> Data.Map.Map b [[c]]
@@ -72,16 +72,15 @@ bin2 f (b, as) dm = case splitOn f as of
                                     Just css -> cs:css)
                                 b
                                 dm
-
 bin3 :: Ord b
-     => (a -> Either b c)
+     => (a -> Either c b)
      -> [a]
      -> Either c (Data.Map.Map b [[c]])
 bin3 f as = case as of
   [] -> return Data.Map.empty
   (a:as') -> case f a of
-    Left b -> return (bin2 f (b, as') Data.Map.empty)
-    Right c -> Left c
+    Right b -> return (bin2 f (b, as') Data.Map.empty)
+    Left c -> Left c
 
 data M a = M (Data.Map.Map String [[Token]] -> Either String a, [String])
 
@@ -131,10 +130,10 @@ parseAllOf allOf' tokens = do
   -- field name
   where M (parseObject, fields) = onApplicativeW parseAllOfB allOf'
         choose = \case
-          TArg a -> Right (TArg a)
+          TArg a -> Left (TArg a)
           TOpt (Opt o) -> if o `elem` fields
-                          then Left o
-                          else Right (TOpt (Opt o))
+                          then Right o
+                          else Left (TOpt (Opt o))
         eBinnedFields = bin3 choose tokens
         iKnowAbout = "I know about "
                      ++ Data.List.intercalate ", "
