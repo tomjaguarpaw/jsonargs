@@ -3,6 +3,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE ConstraintKinds #-}
 
 module Jsonargs2 where
 
@@ -71,8 +72,14 @@ onW onG d f = \case
     PureG b -> f b
     RollG r -> onG (fmap1 (onW onG d f) r) d
 
+onD :: (Functor1 f, c b)
+    => (forall a x. f a x -> Dict (c a) -> a x)
+    -> (forall x. a x -> b x)
+    -> (Free f a x -> b x)
+onD onG = onW onG Dict
+
 onFunctorW :: Functor g => (forall a. f a -> g a) -> (Free FunctorG f b -> g b)
-onFunctorW = onW onFunctorG Dict
+onFunctorW = onD onFunctorG
 
 type FunctorW = Free FunctorG
 
@@ -103,7 +110,7 @@ onApplicativeG d = \case
 onApplicativeW :: Applicative g
                => (forall a. f a -> g a)
                -> (ApplicativeW f b -> g b)
-onApplicativeW = onW onApplicativeG Dict
+onApplicativeW = onD onApplicativeG
 
 data SumG a x where
   SumG  :: [a x] -> SumG a x
@@ -129,7 +136,7 @@ onSumG d = \case
 onSumW :: Sum g
        => (forall a. f a -> g a)
        -> SumW f b -> g b
-onSumW = onW onSumG Dict
+onSumW = onD onSumG
 
 -- }
 
