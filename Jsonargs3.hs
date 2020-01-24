@@ -1,10 +1,12 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 
+{-# OPTIONS_GHC -Wall #-}
+
 module Jsonargs3 where
 
-import Jsonargs2 (FunctorG, FunctorW, Free(PureG),
-                  ApplicativeG, ApplicativeW, SumW, Sum(..),
+import Jsonargs2 (FunctorW, Free(PureG),
+                  ApplicativeW, SumW, Sum(..),
                   onApplicativeW, onSumW, onFunctorW,
                   Size(..),
                   assert)
@@ -44,34 +46,32 @@ data Token = TOpt Opt
   deriving (Ord, Eq, Show)
 
 
-bin :: (a -> Either b c)
-    -> [a]
-    -> ([c], Maybe (b, [a]))
-bin _ [] = ([], Nothing)
-bin f (a:as) = case f a of
+splitOn :: (a -> Either b c)
+        -> [a]
+        -> ([c], Maybe (b, [a]))
+splitOn _ [] = ([], Nothing)
+splitOn f (a:as) = case f a of
   Left b  -> ([], Just (b, as))
-  Right c -> let (cs, rest) = bin f as
+  Right c -> let (cs, rest) = splitOn f as
              in (c:cs, rest)
+
+(|>) :: a -> (a -> c) -> c
+(|>) = flip ($)
 
 bin2 :: Ord b
      => (a -> Either b c)
-     -> b
-     -> [a]
+     -> (b, [a])
      -> Data.Map.Map b [[c]]
      -> Data.Map.Map b [[c]]
-bin2 f b as dm = case bin f as of
-  (cs, Nothing) -> Data.Map.alter (Just . \case
-                                      Nothing -> [cs]
-                                      Just css -> cs:css)
-                                  b
-                                  dm
-  (cs, Just (b', as')) ->
-    let dm' = Data.Map.alter (Just . \case
-                                 Nothing -> [cs]
-                                 Just css -> cs:css)
-                             b
-                             dm
-    in bin2 f b' as' dm'
+bin2 f (b, as) dm = case splitOn f as of
+  (cs, rest) -> dm' cs |> case rest of
+    Nothing -> id
+    Just t -> bin2 f t
+  where dm' cs = Data.Map.alter (Just . \case
+                                    Nothing -> [cs]
+                                    Just css -> cs:css)
+                                b
+                                dm
 
 bin3 :: Ord b
      => (a -> Either b c)
@@ -80,7 +80,7 @@ bin3 :: Ord b
 bin3 f as = case as of
   [] -> return Data.Map.empty
   (a:as') -> case f a of
-    Left b -> return (bin2 f b as' Data.Map.empty)
+    Left b -> return (bin2 f (b, as') Data.Map.empty)
     Right c -> Left c
 
 data M a = M (Data.Map.Map String [[Token]] -> Either String a, [String])
@@ -170,7 +170,7 @@ parseString = \case
     where s = case token of
             TOpt (Opt o) -> o
             TArg (Arg a) -> a
-  
+
 name :: Schema String
 name = string
 
