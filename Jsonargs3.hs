@@ -3,8 +3,8 @@
 
 module Jsonargs3 where
 
-import Jsonargs2 (FunctorW(FunctorW),
-                  ApplicativeW(ApplicativeW), SumW(Sum, SumW), Sum(..),
+import Jsonargs2 (FunctorG, FunctorW, Free(PureG),
+                  ApplicativeG, ApplicativeW, SumW, Sum(..),
                   onApplicativeW, onSumW, onFunctorW,
                   Size(..),
                   assert)
@@ -175,18 +175,18 @@ name :: Schema String
 name = string
 
 string :: Schema String
-string = FunctorW SString
+string = PureG SString
 
 nothing :: Schema ()
-nothing = FunctorW (SAllOf (pure ()))
+nothing = PureG (SAllOf (pure ()))
 
 oneOf :: [(String, Schema a)] -> Schema a
 oneOf =
-  FunctorW
+  PureG
   . SOneOf
   . OneOf
-  . Sum
-  . map (\(a, b) -> SumW (OneField a b))
+  . sSum
+  . map (\(a, b) -> PureG (OneField a b))
 
 large :: Schema Size
 large =  oneOf [ ("large", fmap (const Large) nothing)
@@ -194,13 +194,13 @@ large =  oneOf [ ("large", fmap (const Large) nothing)
                ]
 
 once :: String -> Schema a -> AllOf a
-once field parser = ApplicativeW (AllOfOnce field parser)
+once field parser = PureG (AllOfOnce field parser)
 
 many :: String -> Schema a -> AllOf [a]
-many field parser = ApplicativeW (AllOfMany field parser)
+many field parser = PureG (AllOfMany field parser)
 
 allOf :: AllOf a -> Schema a
-allOf = FunctorW . SAllOf
+allOf = PureG . SAllOf
 
 login :: Schema (String, String)
 login = allOf ((,) <$> once "username" string

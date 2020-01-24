@@ -2,6 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Jsonargs2 where
 
@@ -14,6 +15,7 @@ import qualified Data.Set
 import           Data.Scientific (Scientific)
 import           Control.Applicative (liftA2, Const(Const), getConst)
 import           Data.Monoid ((<>))
+import           Data.Constraint
 
 -- { New class
 
@@ -35,54 +37,99 @@ instance Sum TSList where
 
 -- { Free structures
 
-data FunctorW f a where
-  FunctorW :: f a -> FunctorW f a
-  Fmap :: (a -> b) -> FunctorW f a -> FunctorW f b
+class Functor1 f where
+  fmap1 :: (forall x. a x -> b x) -> f a x -> f b x
 
-instance Functor (FunctorW f) where
-  fmap = Fmap
+data Free f a x where
+  PureG :: a x -> Free f a x
+  RollG :: f (Free f a) x -> Free f a x
 
-onFunctorW :: Functor g => (forall a. f a -> g a) -> (FunctorW f b -> g b)
-onFunctorW f = \case
-  FunctorW b -> f b
-  Fmap g fw -> fmap g (onFunctorW f fw)
+data FunctorG a x where
+  FmapG :: (x -> y) -> a x -> FunctorG a y
 
-data ApplicativeW f a where
-  ApplicativeW :: f a -> ApplicativeW f a
-  Pure :: a -> ApplicativeW f a
-  Apply :: ApplicativeW f (a -> b) -> ApplicativeW f a -> ApplicativeW f b
+instance Functor1 FunctorG where
+  fmap1 f = \case
+    FmapG g a -> FmapG g (f a)
+
+instance Functor (Free FunctorG f) where
+  fmap = fmapG
+
+fmapG :: (x -> y) -> Free FunctorG a x -> Free FunctorG a y
+fmapG f = RollG . FmapG f
+
+onFunctorG :: FunctorG a x -> Dict (Functor a) -> a x
+onFunctorG d = \case
+  Dict -> case d of
+    FmapG g fw -> fmap g fw
+
+onW :: Functor1 f
+    => (forall a x. f a x -> Dict (c a) -> a x)
+    -> Dict (c b)
+    -> (forall x. a x -> b x)
+    -> (Free f a x -> b x)
+onW onG d f = \case
+    PureG b -> f b
+    RollG r -> onG (fmap1 (onW onG d f) r) d
+
+onFunctorW :: Functor g => (forall a. f a -> g a) -> (Free FunctorG f b -> g b)
+onFunctorW = onW onFunctorG Dict
+
+type FunctorW = Free FunctorG
+
+data ApplicativeG a x where
+  Pure  :: x -> ApplicativeG a x
+  Apply :: a (w -> x) -> a w -> ApplicativeG a x
+
+instance Functor1 ApplicativeG where
+  fmap1 f = \case
+    Pure x     -> Pure x
+    Apply wx w -> Apply (f wx) (f w)
+
+type ApplicativeW = Free ApplicativeG
 
 instance Functor (ApplicativeW f) where
   fmap f x = pure f <*> x
 
 instance Applicative (ApplicativeW f) where
-  pure = Pure
-  (<*>) = Apply
+  pure = RollG . Pure
+  x <*> y = RollG (Apply x y)
+
+onApplicativeG :: ApplicativeG a x -> Dict (Applicative a) -> a x
+onApplicativeG d = \case
+  Dict -> case d of
+    Pure x -> pure x
+    g `Apply` x -> g <*> x
 
 onApplicativeW :: Applicative g
                => (forall a. f a -> g a)
                -> (ApplicativeW f b -> g b)
-onApplicativeW f = \case
-  ApplicativeW b -> f b
-  Pure x -> pure x
-  g `Apply` x -> onApplicativeW f g <*> onApplicativeW f x
+onApplicativeW = onW onApplicativeG Dict
 
-data SumW f a where
-  SumW :: f a -> SumW f a
-  Sum :: [SumW f a] -> SumW f a
-  Zero :: SumW f a
+data SumG a x where
+  SumG  :: [a x] -> SumG a x
+  ZeroG :: SumG a x
+
+instance Functor1 SumG where
+  fmap1 f = \case
+    SumG ax -> SumG (fmap f ax)
+    ZeroG   -> ZeroG
+
+type SumW = Free SumG
 
 instance Sum (SumW f) where
-  sZero = Zero
-  sSum = Sum
+  sZero = RollG ZeroG
+  sSum = RollG . SumG
+
+onSumG :: SumG a x -> Dict (Sum a) -> a x
+onSumG d = \case
+  Dict -> case d of
+    SumG ax -> sSum ax
+    ZeroG   -> sZero
 
 onSumW :: Sum g
        => (forall a. f a -> g a)
        -> SumW f b -> g b
-onSumW f = \case
-  SumW b -> f b
-  Sum bs -> sSum (map (onSumW f) bs)
-  Zero   -> sZero
+onSumW = onW onSumG Dict
 
 -- }
 
@@ -227,23 +274,23 @@ helpOneOf = \case
 
 oneOfDefault :: (Text, Schema a) -> [(Text, Schema a)] -> Schema a
 oneOfDefault def =
-  FunctorW
+  PureG
   . SOneOf
   . OneOfDefault def
   . sSum
-  . map (SumW . OneField)
+  . map (PureG . OneField)
 
 allField :: Text -> Schema a -> AllOf a
-allField t = ApplicativeW . AllField t
+allField t = PureG . AllField t
 
 allOf :: AllOf a -> Schema a
-allOf = FunctorW . SAllOf
+allOf = PureG . SAllOf
 
 number :: Maybe Scientific -> Schema Scientific
-number = FunctorW . SNumber
+number = PureG . SNumber
 
 string :: Maybe Text -> Schema Text
-string = FunctorW . SString
+string = PureG . SString
 
 
 required :: Maybe a
