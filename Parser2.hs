@@ -1,57 +1,54 @@
 {-# LANGUAGE LambdaCase    #-}
 {-# LANGUAGE DeriveFunctor #-}
 
-import Control.Category ((>>>))
+{-# OPTIONS_GHC -Wall #-}
+
 import Data.List
 
 data ParseResult t a =
-    All a
-  | Partial (Parser t a)
+    All [t] a
+  | Partial [t] (Parser t a)
   | None [String]
   deriving Functor
 
-instance Show a => Show (ParseResult t a) where
+instance (Show t, Show a) => Show (ParseResult t a) where
   show = \case
-    All a     -> "All " ++ show a
-    Partial _ -> "Partial"
-    None s    -> "None " ++ show s
+    All ts a     -> "All " ++ show ts ++ show a
+    Partial ts _ -> "Partial " ++ show ts
+    None s       -> "None " ++ show s
 
-newtype Parser t a = Parser { stepParser :: [t] -> ([t], ParseResult t a) }
+newtype Parser t a = Parser { stepParser :: [t] -> ParseResult t a }
   deriving Functor
 
 runParser :: Parser t a -> [t] -> ([t], Either [String] a)
-runParser p = stepParser p >>> \case
-  (ts', pr) -> case pr of
-    All a      -> (ts', Right a)
-    Partial p' -> runParser p' ts'
-    None s     -> (ts', Left s)
+runParser p ts = case stepParser p ts of
+    All ts' a      -> (ts', Right a)
+    Partial ts' p' -> runParser p' ts'
+    None s         -> (ts, Left s)
 
 mix :: Parser t (a -> b) -> Parser t a -> Parser t b
-mix p1 p2 = Parser (stepParser p1 >>> \case
-  (ts, pr1) -> case pr1 of
-    All ab      -> (ts, Partial (fmap ab p2))
-    Partial p1' -> (ts, Partial (mix p1' p2))
+mix p1 p2 = Parser (\ts -> case stepParser p1 ts of
+    All ts' ab      -> Partial ts' (fmap ab p2)
+    Partial ts' p1' -> Partial ts' (mix p1' p2)
     None s1     -> case stepParser p2 ts of
-      (ts', pr2) -> case pr2 of
-        All a       -> (ts', Partial (fmap ($ a) p1))
-        Partial p2' -> (ts', Partial (mix p1 p2'))
-        None s2     -> (ts', None (s1 <> s2))
+        All ts' a       -> Partial ts' (fmap ($ a) p1)
+        Partial ts' p2' -> Partial ts' (mix p1 p2')
+        None s2         -> None (s1 <> s2)
   )
 
 andThen :: Parser t (a -> b) -> Parser t a -> Parser t b
-andThen p1 p2 = Parser (stepParser p1 >>> \case
-  (ts, pr1) -> case pr1 of
-    All ab      -> stepParser (fmap ab p2) ts
-    Partial p1' -> stepParser (andThen p1' p2) ts
-    None s      -> (ts, None s)
+andThen p1 p2 = Parser (\ts -> case stepParser p1 ts of
+    All ts' ab      -> stepParser (fmap ab p2) ts'
+    Partial ts' p1' -> stepParser (andThen p1' p2) ts'
+    None s          -> None s
   )
 
 tokenMaybe :: (t -> Maybe r) -> String -> Parser t r
 tokenMaybe f s = Parser (\case
-  []          -> ([], None (["End of stream whilst trying to parse " ++ s]))
-  ts@(t:rest) -> case f t of
-    Just c  -> (rest, All c)
-    Nothing -> (ts, None [s])
+  []   -> None ["End of stream whilst trying to parse " ++ s]
+  t:ts -> case f t of
+    Just c  -> All ts c
+    Nothing -> None [s]
   )
 
 satisfy :: (t -> Bool) -> String-> Parser t t
@@ -69,8 +66,10 @@ option s = (flip const <$> switch s) `andThen` string
 example :: Parser String (String, String)
 example = ((,) <$> option "foo") `mix` option "bar"
 
+example2 :: Parser String (String, String, String)
 example2 = (((,,) <$> option "foo") `mix` option "bar" ) `mix` option "baz"
 
+examples :: [[String]]
 examples =
     [ []
     , ["--foo"]
@@ -81,11 +80,13 @@ examples =
     , ["--foo", "--bar", "fooarg", "bararg"]
     ]
 
+examples2 :: [[String]]
 examples2 = map concat (perms [ [ "--baz", "bazarg" ]
                               , [ "--bar", "bararg" ]
                               , [ "--foo", "fooarg" ]
                               ])
 
+main :: IO ()
 main = do
   flip mapM_ examples $ \ex -> do
     putStr "Input: "
@@ -102,7 +103,8 @@ main = do
     case runParser example2 ex of
       (ts, r) -> case r of
         Left s  -> putStr "Failed : " >> print (ts, ex) >> print s
-        Right r -> print (ts, r)
+        Right rr -> print (ts, rr)
 
+perms :: Eq a => [a] -> [[a]]
 perms [] = [[]]
 perms xs = [ x:ps | x <- xs , ps <- perms ( xs\\[x] ) ]
