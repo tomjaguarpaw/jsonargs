@@ -33,7 +33,7 @@ mix p1 p2 = Parser (stepParser p1 >>> \case
     None        -> case stepParser p2 ts of
       (ts', pr2) -> case pr2 of
         All a       -> (ts', Partial (fmap ($ a) p1))
-        Partial p2' -> (ts', Partial (mix p1 p2))
+        Partial p2' -> (ts', Partial (mix p1 p2'))
         None        -> (ts', None)
   )
 
