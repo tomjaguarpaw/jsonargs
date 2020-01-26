@@ -5,14 +5,12 @@ import Control.Category ((>>>))
 
 data ParseResult t a =
     All a
-  | Partial (Parser t a)
   | None
   deriving Functor
 
 instance Show a => Show (ParseResult t a) where
   show = \case
     All a     -> "All " ++ show a
-    Partial _ -> "Partial"
     None      -> "None"
 
 newtype Parser t a = Parser { stepParser :: [t] -> ([t], ParseResult t a) }
@@ -22,18 +20,15 @@ runParser :: Parser t a -> [t] -> ([t], Maybe a)
 runParser p = stepParser p >>> \case
   (ts', pr) -> case pr of
     All a      -> (ts', Just a)
-    Partial p' -> runParser p' ts'
     None       -> (ts', Nothing)
 
 mix :: Parser t (a -> b) -> Parser t a -> Parser t b
 mix p1 p2 = Parser (stepParser p1 >>> \case
   (ts, pr1) -> case pr1 of
-    All ab      -> (ts, Partial (fmap ab p2))
-    Partial p1' -> (ts, Partial (mix p1' p2))
+    All ab      -> stepParser (fmap ab p2) ts
     None        -> case stepParser p2 ts of
       (ts', pr2) -> case pr2 of
-        All a       -> (ts', Partial (fmap ($ a) p1))
-        Partial p2' -> (ts', Partial (mix p1 p2))
+        All a       -> stepParser (fmap ($ a) p1) ts'
         None        -> (ts', None)
   )
 
@@ -41,7 +36,6 @@ andThen :: Parser t (a -> b) -> Parser t a -> Parser t b
 andThen p1 p2 = Parser (stepParser p1 >>> \case
   (ts, pr1) -> case pr1 of
     All ab      -> stepParser (fmap ab p2) ts
-    Partial p1' -> stepParser (andThen p1' p2) ts
     None        -> (ts, None)
   )
 
